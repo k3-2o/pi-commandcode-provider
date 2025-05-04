@@ -201,11 +201,65 @@ function streamCommandCode(
     };
 
     const controller = new AbortController();
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+
+    const abortUpstream = () => {
+      if (!controller.signal.aborted) controller.abort();
+      try { reader?.cancel().catch(() => undefined); } catch { /* best-effort */ }
+    };
+
+    if (options?.signal?.aborted) {
+      abortUpstream();
+    } else {
+      options?.signal?.addEventListener("abort", abortUpstream, { once: true });
+    }
+
+    // Helper: race a promise against the abort signal.
+    const raceAbort = <T>(promise: Promise<T>): Promise<T> => {
+      if (controller.signal.aborted) {
+        return Promise.reject(new DOMException("The operation was aborted", "AbortError"));
+      }
+      return new Promise<T>((resolve, reject) => {
+        const onAbort = () => reject(new DOMException("The operation was aborted", "AbortError"));
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+        promise.then(
+          (v) => { controller.signal.removeEventListener("abort", onAbort); resolve(v); },
+          (e) => { controller.signal.removeEventListener("abort", onAbort); reject(e); },
+        );
+      });
+    };
 
     try {
       stream.push({ type: "start", partial: output });
 
-      const response = await fetch(`${API_BASE}/alpha/generate`, {
+      let body: unknown = {
+        config: {
+          workingDir: process.cwd(),
+          date: new Date().toISOString().split("T")[0],
+          environment: getEnvironmentInfo(),
+          structure: [],
+          isGitRepo: false,
+          currentBranch: "",
+          mainBranch: "",
+          gitStatus: "",
+          recentCommits: [],
+        },
+        memory: "", taste: "", skills: null,
+        permissionMode: "standard" as const,
+        params: {
+          model: model.id,
+          messages: messagesToCC(context.messages),
+          tools: toolsToJson(context.tools),
+          system: context.systemPrompt ?? "",
+          max_tokens: Math.min(options?.maxTokens ?? model.maxTokens, 200_000),
+          stream: true,
+        },
+      };
+
+      const nextBody = await raceAbort(Promise.resolve(options?.onPayload?.(body, model)));
+      if (nextBody !== undefined) body = nextBody;
+
+      const response = await raceAbort(fetch(`${API_BASE}/alpha/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -216,39 +270,18 @@ function streamCommandCode(
           "x-taste-learning": "false",
           "x-co-flag": "false",
           "x-session-id": uuid(),
+          ...options?.headers,
         },
-        body: JSON.stringify({
-          config: {
-            workingDir: process.cwd(),
-            date: new Date().toISOString().split("T")[0],
-            environment: getEnvironmentInfo(),
-            structure: [],
-            isGitRepo: false,
-            currentBranch: "",
-            mainBranch: "",
-            gitStatus: "",
-            recentCommits: [],
-          },
-          memory: "", taste: "", skills: null,
-          permissionMode: "standard" as const,
-          params: {
-            model: model.id,
-            messages: messagesToCC(context.messages),
-            tools: toolsToJson(context.tools),
-            system: context.systemPrompt ?? "",
-            max_tokens: Math.min(options?.maxTokens ?? model.maxTokens, 200_000),
-            stream: true,
-          },
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
-      });
+      }));
 
       if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
+        const errBody = await raceAbort(response.text().catch(() => ""));
         throw new Error(`Command Code API error ${response.status}: ${errBody.slice(0, 500)}`);
       }
 
-      const reader = response.body?.getReader();
+      reader = response.body?.getReader();
       if (!reader) throw new Error("No response body");
 
       const decoder = new TextDecoder();
@@ -260,13 +293,16 @@ function streamCommandCode(
       let finished = false;
 
       readLoop: for (;;) {
-        const { done, value } = await reader.read();
+        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+        const { done, value } = await raceAbort(reader.read());
         if (done) break;
+        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
+          if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
           const event = parseStreamEventLine(line);
           if (!event) continue;
 
@@ -344,10 +380,19 @@ function streamCommandCode(
       stream.push({ type: "done", reason: output.stopReason as "stop" | "length" | "toolUse", message: output });
       stream.end();
     } catch (error: any) {
-      output.stopReason = "error";
-      output.errorMessage = error?.message ?? String(error);
-      stream.push({ type: "error", reason: "error", error: output });
+      if (controller.signal.aborted) {
+        output.stopReason = "aborted";
+        output.errorMessage = "Request aborted";
+      } else {
+        output.stopReason = "error";
+        output.errorMessage = error?.message ?? String(error);
+      }
+      stream.push({ type: "error", reason: output.stopReason, error: output });
       stream.end();
+    } finally {
+      options?.signal?.removeEventListener("abort", abortUpstream);
+      try { await reader?.cancel(); } catch { /* best-effort */ }
+      try { reader?.releaseLock(); } catch { /* may already be released */ }
     }
   })();
 
