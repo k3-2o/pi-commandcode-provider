@@ -3,9 +3,17 @@
  * Connects pi to Command Code's API (https://api.commandcode.ai/alpha/generate).
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const API_BASE = "https://api.commandcode.ai";
+
+// ---------------------------------------------------------------------------
+// Model definitions
+// ---------------------------------------------------------------------------
 
 const MODELS = [
   // Premium (Anthropic)
@@ -30,6 +38,139 @@ const MODELS = [
   { id: "Qwen/Qwen3.6-Max-Preview", name: "Qwen 3.6 Max (CC)", reasoning: true, contextWindow: 1_000_000, maxTokens: 131_072 },
   { id: "Qwen/Qwen3.6-Plus", name: "Qwen 3.6 Plus (CC)", reasoning: true, contextWindow: 1_000_000, maxTokens: 131_072 },
 ];
+
+// ---------------------------------------------------------------------------
+// Typebox → JSON Schema conversion
+// ---------------------------------------------------------------------------
+
+function toJsonSchema(schema: any): any {
+  if (!schema) return {};
+  const s = schema as Record<string, any>;
+  const kind = s.kind ?? s.type;
+
+  if (s.enum) {
+    return { type: typeof s.enum[0], enum: s.enum };
+  }
+
+  switch (kind) {
+    case "string":
+    case "String":
+      return { type: "string" };
+    case "number":
+    case "Number":
+      return { type: "number" };
+    case "boolean":
+    case "Boolean":
+      return { type: "boolean" };
+    case "object":
+    case "Object": {
+      const props: Record<string, any> = {};
+      const inferredRequired: string[] = [];
+      if (s.properties) {
+        for (const [k, v] of Object.entries(s.properties)) {
+          props[k] = toJsonSchema(v);
+          if (!(v as any).optional && !s.optional?.includes?.(k))
+            inferredRequired.push(k);
+        }
+      }
+      const required = Array.isArray(s.required) ? s.required : inferredRequired;
+      const out: any = { type: "object" };
+      if (Object.keys(props).length) out.properties = props;
+      if (required.length) out.required = required;
+      return out;
+    }
+    case "array":
+    case "Array":
+      return { type: "array", items: toJsonSchema(s.items ?? s.element) };
+    case "union":
+    case "Union": {
+      const variants = s.variants ?? s.anyOf ?? [];
+      for (const v of variants) {
+        const schema = toJsonSchema(v);
+        if (schema && Object.keys(schema).length) return schema;
+      }
+      return {};
+    }
+    case "optional":
+    case "Optional":
+      return toJsonSchema(s.wrapped ?? s.inner);
+    default:
+      return {};
+  }
+}
+
+function toolsToJson(tools: any[]): any[] {
+  if (!tools) return [];
+  return tools.map((t) => {
+    const schema = t.parameters ? toJsonSchema(t.parameters) : {};
+    return {
+      type: "function",
+      name: t.name,
+      description: t.description,
+      input_schema: schema,
+    };
+  });
+}
+
+function messagesToCC(msgs: any[]): any[] {
+  const out: any[] = [];
+  for (const m of msgs) {
+    if (m.role === "user") {
+      out.push({
+        role: "user",
+        content: typeof m.content === "string" ? m.content : m.content,
+      });
+    } else if (m.role === "assistant") {
+      const parts: any[] = [];
+      for (const c of m.content) {
+        if (c.type === "text") {
+          parts.push({ type: "text", text: c.text });
+        } else if (c.type === "thinking") {
+          parts.push({ type: "reasoning", text: c.thinking });
+        } else if (c.type === "toolCall") {
+          parts.push({
+            type: "tool-call",
+            toolCallId: c.id,
+            toolName: c.name,
+            input: c.arguments,
+          });
+        }
+      }
+      out.push({ role: "assistant", content: parts });
+    } else if (m.role === "toolResult") {
+      const text = (m.content ?? [])
+        .filter((c: any) => c.type === "text")
+        .map((c: any) => c.text ?? "")
+        .join("\n");
+      out.push({
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: m.toolCallId,
+            toolName: m.toolName,
+            output: m.isError
+              ? { type: "error-text", value: text }
+              : { type: "text", value: text },
+          },
+        ],
+      });
+    }
+  }
+  return out;
+}
+
+function getEnvironmentInfo(): string {
+  return `${process.platform}-${process.arch}, Node.js ${process.version}`;
+}
+
+function uuid(): string {
+  return crypto.randomUUID();
+}
+
+// ---------------------------------------------------------------------------
+// Extension entry point
+// ---------------------------------------------------------------------------
 
 export default function (pi: ExtensionAPI) {
   pi.registerProvider("commandcode", {
