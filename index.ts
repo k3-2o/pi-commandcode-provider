@@ -373,8 +373,19 @@ function streamCommandCode(
         }
       }
 
+      // End any lingering text block
       if (textBlock) {
         stream.push({ type: "text_end", contentIndex: currentTextIdx, content: textBlock.text, partial: output });
+      }
+
+      // Emit remaining thinking (may arrive after finish without reasoning-end)
+      if (thinkingBlock.length > 0) {
+        const thinkingText = thinkingBlock.join("");
+        output.content.push({ type: "thinking", thinking: thinkingText });
+        const idx = output.content.length - 1;
+        stream.push({ type: "thinking_start", contentIndex: idx, partial: output });
+        stream.push({ type: "thinking_delta", contentIndex: idx, delta: thinkingText, partial: output });
+        stream.push({ type: "thinking_end", contentIndex: idx, content: thinkingText, partial: output });
       }
 
       stream.push({ type: "done", reason: output.stopReason as "stop" | "length" | "toolUse", message: output });
