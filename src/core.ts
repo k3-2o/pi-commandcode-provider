@@ -50,12 +50,18 @@ function defaultUsage(): Usage {
   };
 }
 
-function commandCodeUsage(event: Record<string, unknown>): Record<string, unknown> | undefined {
+function commandCodeUsage(
+  event: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   return isRecord(event.totalUsage) ? event.totalUsage : undefined;
 }
 
-function commandCodeInputTokenDetails(usage: Record<string, unknown>): Record<string, unknown> | undefined {
-  return isRecord(usage.inputTokenDetails) ? usage.inputTokenDetails : undefined;
+function commandCodeInputTokenDetails(
+  usage: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  return isRecord(usage.inputTokenDetails)
+    ? usage.inputTokenDetails
+    : undefined;
 }
 
 function headersToRecord(headers: Headers): Record<string, string> {
@@ -109,11 +115,13 @@ export function createStreamCommandCode(deps: CoreDependencies) {
     const stream = deps.createStream();
 
     async function run() {
-      const apiKey = options?.apiKey ?? getApiKey({
-        env: deps.env,
-        authPaths: deps.authPaths,
-        homeDir: deps.homeDir,
-      });
+      const apiKey =
+        options?.apiKey ??
+        getApiKey({
+          env: deps.env,
+          authPaths: deps.authPaths,
+          homeDir: deps.homeDir,
+        });
 
       if (!apiKey) {
         const msg: AssistantMessageLike = {
@@ -125,7 +133,7 @@ export function createStreamCommandCode(deps: CoreDependencies) {
           usage: defaultUsage(),
           stopReason: "error",
           errorMessage:
-            "No Command Code API key. Set COMMANDCODE_API_KEY env var or configure ~/.commandcode/auth.json or ~/.pi/agent/auth.json.",
+            "No Command Code API key. Run /login commandcode, set COMMANDCODE_API_KEY env var, or configure ~/.commandcode/auth.json or ~/.pi/agent/auth.json.",
           timestamp: now(),
         };
         stream.push({ type: "error", reason: "error", error: msg });
@@ -163,7 +171,9 @@ export function createStreamCommandCode(deps: CoreDependencies) {
       if (options?.signal?.aborted) {
         abortUpstream();
       } else {
-        options?.signal?.addEventListener("abort", abortUpstream, { once: true });
+        options?.signal?.addEventListener("abort", abortUpstream, {
+          once: true,
+        });
       }
 
       const endTextBlock = () => {
@@ -184,9 +194,23 @@ export function createStreamCommandCode(deps: CoreDependencies) {
         thinkingBlock = [];
         output.content.push({ type: "thinking", thinking: thinkingText });
         const idx = output.content.length - 1;
-        stream.push({ type: "thinking_start", contentIndex: idx, partial: output });
-        stream.push({ type: "thinking_delta", contentIndex: idx, delta: thinkingText, partial: output });
-        stream.push({ type: "thinking_end", contentIndex: idx, content: thinkingText, partial: output });
+        stream.push({
+          type: "thinking_start",
+          contentIndex: idx,
+          partial: output,
+        });
+        stream.push({
+          type: "thinking_delta",
+          contentIndex: idx,
+          delta: thinkingText,
+          partial: output,
+        });
+        stream.push({
+          type: "thinking_end",
+          contentIndex: idx,
+          content: thinkingText,
+          partial: output,
+        });
       };
 
       const handleEvent = (event: unknown) => {
@@ -198,11 +222,20 @@ export function createStreamCommandCode(deps: CoreDependencies) {
               textBlock = { type: "text", text: "" };
               output.content.push(textBlock);
               currentTextIdx = output.content.length - 1;
-              stream.push({ type: "text_start", contentIndex: currentTextIdx, partial: output });
+              stream.push({
+                type: "text_start",
+                contentIndex: currentTextIdx,
+                partial: output,
+              });
             }
             const delta = stringValue(event.text) ?? "";
             textBlock.text += delta;
-            stream.push({ type: "text_delta", contentIndex: currentTextIdx, delta, partial: output });
+            stream.push({
+              type: "text_delta",
+              contentIndex: currentTextIdx,
+              delta,
+              partial: output,
+            });
             break;
           }
 
@@ -222,12 +255,23 @@ export function createStreamCommandCode(deps: CoreDependencies) {
               type: "toolCall",
               id: stringValue(event.toolCallId) ?? "",
               name: stringValue(event.toolName) ?? "",
-              arguments: recordOrEmpty(event.input ?? event.args),
+              arguments: recordOrEmpty(
+                event.input ?? event.args ?? event.arguments,
+              ),
             };
             output.content.push(toolCall);
             const idx = output.content.length - 1;
-            stream.push({ type: "toolcall_start", contentIndex: idx, partial: output });
-            stream.push({ type: "toolcall_end", contentIndex: idx, toolCall, partial: output });
+            stream.push({
+              type: "toolcall_start",
+              contentIndex: idx,
+              partial: output,
+            });
+            stream.push({
+              type: "toolcall_end",
+              contentIndex: idx,
+              toolCall,
+              partial: output,
+            });
             break;
           }
 
@@ -237,8 +281,10 @@ export function createStreamCommandCode(deps: CoreDependencies) {
               const details = commandCodeInputTokenDetails(usage);
               output.usage.input = numberValue(usage.inputTokens) ?? 0;
               output.usage.output = numberValue(usage.outputTokens) ?? 0;
-              output.usage.cacheRead = numberValue(details?.cacheReadTokens) ?? 0;
-              output.usage.cacheWrite = numberValue(details?.cacheWriteTokens) ?? 0;
+              output.usage.cacheRead =
+                numberValue(details?.cacheReadTokens) ?? 0;
+              output.usage.cacheWrite =
+                numberValue(details?.cacheWriteTokens) ?? 0;
               output.usage.totalTokens =
                 output.usage.input +
                 output.usage.output +
@@ -253,7 +299,10 @@ export function createStreamCommandCode(deps: CoreDependencies) {
 
           case "error": {
             const errorRecord = isRecord(event.error) ? event.error : undefined;
-            const message = stringValue(errorRecord?.message) ?? stringValue(event.error) ?? "Stream error";
+            const message =
+              stringValue(errorRecord?.message) ??
+              stringValue(event.error) ??
+              "Stream error";
             output.stopReason = "error";
             output.errorMessage = message;
             throw new Error(message);
@@ -285,12 +334,18 @@ export function createStreamCommandCode(deps: CoreDependencies) {
             messages: messagesToCC(context.messages),
             tools: toolsToJson(context.tools),
             system: context.systemPrompt ?? "",
-            max_tokens: Math.min(options?.maxTokens ?? model.maxTokens, 200_000),
+            max_tokens: Math.min(
+              options?.maxTokens ?? model.maxTokens,
+              200_000,
+            ),
             stream: true,
           },
         };
 
-        const nextBody = await raceAbort(Promise.resolve(options?.onPayload?.(body, model)), controller.signal);
+        const nextBody = await raceAbort(
+          Promise.resolve(options?.onPayload?.(body, model)),
+          controller.signal,
+        );
         if (nextBody !== undefined) body = nextBody;
 
         const response = await raceAbort(
@@ -314,13 +369,26 @@ export function createStreamCommandCode(deps: CoreDependencies) {
         );
 
         await raceAbort(
-          Promise.resolve(options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model)),
+          Promise.resolve(
+            options?.onResponse?.(
+              {
+                status: response.status,
+                headers: headersToRecord(response.headers),
+              },
+              model,
+            ),
+          ),
           controller.signal,
         );
 
         if (!response.ok) {
-          const errBody = await raceAbort(response.text().catch(() => ""), controller.signal);
-          throw new Error(`Command Code API error ${response.status}: ${errBody.slice(0, 500)}`);
+          const errBody = await raceAbort(
+            response.text().catch(() => ""),
+            controller.signal,
+          );
+          throw new Error(
+            `Command Code API error ${response.status}: ${errBody.slice(0, 500)}`,
+          );
         }
 
         reader = response.body?.getReader();
@@ -331,7 +399,10 @@ export function createStreamCommandCode(deps: CoreDependencies) {
 
         readLoop: for (;;) {
           if (controller.signal.aborted) throw abortError("Aborted");
-          const { done, value } = await raceAbort(reader.read(), controller.signal);
+          const { done, value } = await raceAbort(
+            reader.read(),
+            controller.signal,
+          );
           if (done) {
             if (buffer.trim()) handleEvent(parseStreamEventLine(buffer));
             break;
@@ -352,14 +423,23 @@ export function createStreamCommandCode(deps: CoreDependencies) {
         endTextBlock();
         flushThinkingBlock();
 
-        stream.push({ type: "done", reason: successStopReason(output.stopReason), message: output });
+        stream.push({
+          type: "done",
+          reason: successStopReason(output.stopReason),
+          message: output,
+        });
         stream.end();
       } catch (error: unknown) {
-        const reason: ErrorReason = controller.signal.aborted ? "aborted" : "error";
+        const reason: ErrorReason = controller.signal.aborted
+          ? "aborted"
+          : "error";
         output.stopReason = reason;
-        output.errorMessage = reason === "aborted"
-          ? "Request aborted"
-          : error instanceof Error ? error.message : String(error);
+        output.errorMessage =
+          reason === "aborted"
+            ? "Request aborted"
+            : error instanceof Error
+              ? error.message
+              : String(error);
         stream.push({ type: "error", reason, error: output });
         stream.end();
       } finally {

@@ -65,7 +65,15 @@ export async function collectEvents(
   return await Promise.race([
     collect(),
     new Promise<AssistantMessageEvent[]>((_, reject) => {
-      setTimeout(() => reject(new Error(`Timed out collecting stream events after ${timeoutMs}ms`)), timeoutMs);
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `Timed out collecting stream events after ${timeoutMs}ms`,
+            ),
+          ),
+        timeoutMs,
+      );
     }),
   ]);
 }
@@ -94,7 +102,9 @@ export interface TestDepsResult {
   calculatedUsages: Usage[];
 }
 
-export function createTestDeps(overrides: Partial<CoreDependencies> = {}): TestDepsResult {
+export function createTestDeps(
+  overrides: Partial<CoreDependencies> = {},
+): TestDepsResult {
   const calculatedUsages: Usage[] = [];
   const streamCommandCode = createStreamCommandCode({
     createStream: createTestEventStream,
@@ -197,7 +207,8 @@ export async function startMockCommandCodeServer(): Promise<MockCommandCodeServe
         if (!ended) closedBeforeEnd = true;
       });
 
-      const chunks = plan.chunks ?? (plan.events ?? []).map((event) => `${event}\n`);
+      const chunks =
+        plan.chunks ?? (plan.events ?? []).map((event) => `${event}\n`);
       const delays = plan.delays ?? chunks.map(() => 0);
       let index = 0;
 

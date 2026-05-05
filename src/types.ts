@@ -87,20 +87,59 @@ export interface StreamOptions {
   signal?: AbortSignal;
   headers?: Record<string, string>;
   maxTokens?: number;
-  onPayload?: (payload: unknown, model: ModelLike) => unknown | Promise<unknown>;
-  onResponse?: (response: ProviderResponseInfo, model: ModelLike) => void | Promise<void>;
+  onPayload?: (
+    payload: unknown,
+    model: ModelLike,
+  ) => unknown | Promise<unknown>;
+  onResponse?: (
+    response: ProviderResponseInfo,
+    model: ModelLike,
+  ) => void | Promise<void>;
 }
 
 export type AssistantMessageEvent =
   | { type: "start"; partial: AssistantMessageLike }
   | { type: "text_start"; contentIndex: number; partial: AssistantMessageLike }
-  | { type: "text_delta"; contentIndex: number; delta: string; partial: AssistantMessageLike }
-  | { type: "text_end"; contentIndex: number; content: string; partial: AssistantMessageLike }
-  | { type: "thinking_start"; contentIndex: number; partial: AssistantMessageLike }
-  | { type: "thinking_delta"; contentIndex: number; delta: string; partial: AssistantMessageLike }
-  | { type: "thinking_end"; contentIndex: number; content: string; partial: AssistantMessageLike }
-  | { type: "toolcall_start"; contentIndex: number; partial: AssistantMessageLike }
-  | { type: "toolcall_end"; contentIndex: number; toolCall: ToolCallContent; partial: AssistantMessageLike }
+  | {
+      type: "text_delta";
+      contentIndex: number;
+      delta: string;
+      partial: AssistantMessageLike;
+    }
+  | {
+      type: "text_end";
+      contentIndex: number;
+      content: string;
+      partial: AssistantMessageLike;
+    }
+  | {
+      type: "thinking_start";
+      contentIndex: number;
+      partial: AssistantMessageLike;
+    }
+  | {
+      type: "thinking_delta";
+      contentIndex: number;
+      delta: string;
+      partial: AssistantMessageLike;
+    }
+  | {
+      type: "thinking_end";
+      contentIndex: number;
+      content: string;
+      partial: AssistantMessageLike;
+    }
+  | {
+      type: "toolcall_start";
+      contentIndex: number;
+      partial: AssistantMessageLike;
+    }
+  | {
+      type: "toolcall_end";
+      contentIndex: number;
+      toolCall: ToolCallContent;
+      partial: AssistantMessageLike;
+    }
   | { type: "done"; reason: StopReason; message: AssistantMessageLike }
   | { type: "error"; reason: ErrorReason; error: AssistantMessageLike };
 

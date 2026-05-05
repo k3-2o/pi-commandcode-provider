@@ -37,8 +37,14 @@ function eventTypes(events: readonly AssistantMessageEvent[]): string[] {
 
 describe("streamCommandCode — auth", () => {
   it("emits a missing-key error without touching the network", async () => {
-    const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl(), env: {}, authPaths: [] });
-    const stream = streamCommandCode(makeModel(), makeContext(), { apiKey: "" });
+    const { streamCommandCode } = createTestDeps({
+      apiBase: server.baseUrl(),
+      env: {},
+      authPaths: [],
+    });
+    const stream = streamCommandCode(makeModel(), makeContext(), {
+      apiKey: "",
+    });
     const events = await collectEvents(stream);
 
     assert.deepEqual(eventTypes(events), ["error"]);
@@ -53,11 +59,19 @@ describe("streamCommandCode — auth", () => {
       type: "success",
       events: [JSON.stringify({ type: "finish", finishReason: "stop" })],
     });
-    const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl(), env: { COMMANDCODE_API_KEY: "env-key" } });
+    const { streamCommandCode } = createTestDeps({
+      apiBase: server.baseUrl(),
+      env: { COMMANDCODE_API_KEY: "env-key" },
+    });
 
-    await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "option-key" }));
+    await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "option-key" }),
+    );
 
-    assert.equal(server.lastRequestHeaders().authorization, "Bearer option-key");
+    assert.equal(
+      server.lastRequestHeaders().authorization,
+      "Bearer option-key",
+    );
   });
 });
 
@@ -79,17 +93,33 @@ describe("streamCommandCode — successful streams", () => {
         }),
       ],
     });
-    const { streamCommandCode, calculatedUsages } = createTestDeps({ apiBase: server.baseUrl() });
+    const { streamCommandCode, calculatedUsages } = createTestDeps({
+      apiBase: server.baseUrl(),
+    });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    );
 
-    assert.deepEqual(eventTypes(events), ["start", "text_start", "text_delta", "text_delta", "text_end", "done"]);
+    assert.deepEqual(eventTypes(events), [
+      "start",
+      "text_start",
+      "text_delta",
+      "text_delta",
+      "text_end",
+      "done",
+    ]);
     const done = events.at(-1);
     assert.equal(done?.type, "done");
     if (done?.type !== "done") throw new Error("expected done");
     assert.equal(done.reason, "stop");
     assert.equal(done.message.content[0]?.type, "text");
-    assert.equal(done.message.content[0]?.type === "text" ? done.message.content[0].text : "", "Hello");
+    assert.equal(
+      done.message.content[0]?.type === "text"
+        ? done.message.content[0].text
+        : "",
+      "Hello",
+    );
     assert.equal(done.message.usage.totalTokens, 11);
     assert.equal(calculatedUsages.length, 1);
   });
@@ -105,11 +135,17 @@ describe("streamCommandCode — successful streams", () => {
     });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }), 500);
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      500,
+    );
 
     assert.equal(events.at(-1)?.type, "done");
     await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.ok(server.responseClosedBeforeEnd(), "client should cancel the still-open response body");
+    assert.ok(
+      server.responseClosedBeforeEnd(),
+      "client should cancel the still-open response body",
+    );
   });
 
   it("emits reasoning and tool-call blocks in order", async () => {
@@ -119,13 +155,20 @@ describe("streamCommandCode — successful streams", () => {
         JSON.stringify({ type: "reasoning-delta", text: "think" }),
         JSON.stringify({ type: "reasoning-end" }),
         JSON.stringify({ type: "text-delta", text: "Using tool" }),
-        JSON.stringify({ type: "tool-call", toolCallId: "call_1", toolName: "read_file", input: { path: "/tmp/x" } }),
+        JSON.stringify({
+          type: "tool-call",
+          toolCallId: "call_1",
+          toolName: "read_file",
+          input: JSON.stringify({ path: "/tmp/x" }),
+        }),
         JSON.stringify({ type: "finish", finishReason: "tool-calls" }),
       ],
     });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    );
 
     assert.deepEqual(eventTypes(events), [
       "start",
@@ -142,9 +185,15 @@ describe("streamCommandCode — successful streams", () => {
     const done = events.at(-1);
     if (done?.type !== "done") throw new Error("expected done");
     assert.equal(done.reason, "toolUse");
-    assert.deepEqual(done.message.content.map((content) => content.type), ["thinking", "text", "toolCall"]);
+    assert.deepEqual(
+      done.message.content.map((content) => content.type),
+      ["thinking", "text", "toolCall"],
+    );
     const toolCall = done.message.content[2];
-    assert.equal(toolCall?.type === "toolCall" ? toolCall.name : "", "read_file");
+    assert.equal(
+      toolCall?.type === "toolCall" ? toolCall.name : "",
+      "read_file",
+    );
   });
 
   it("flushes reasoning if finish arrives without reasoning-end", async () => {
@@ -157,7 +206,9 @@ describe("streamCommandCode — successful streams", () => {
     });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    );
 
     const done = events.at(-1);
     if (done?.type !== "done") throw new Error("expected done");
@@ -167,67 +218,109 @@ describe("streamCommandCode — successful streams", () => {
 
 describe("streamCommandCode — request serialization", () => {
   it("sends the expected request body and default headers", async () => {
-    server.mockResponse({ type: "success", events: [JSON.stringify({ type: "finish", finishReason: "stop" })] });
+    server.mockResponse({
+      type: "success",
+      events: [JSON.stringify({ type: "finish", finishReason: "stop" })],
+    });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
     const context = makeContext({
       messages: [
         { role: "user", content: "first" },
-        { role: "assistant", content: [{ type: "text", text: "first response" }] },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: "first response" }],
+        },
         { role: "user", content: "second" },
       ],
       tools: [
         {
           name: "get_weather",
           description: "Get weather",
-          parameters: { kind: "object", properties: { city: { kind: "string" } } },
+          parameters: {
+            kind: "object",
+            properties: { city: { kind: "string" } },
+          },
         },
       ],
     });
 
-    await collectEvents(streamCommandCode(makeModel(), context, { apiKey: "mock-key", maxTokens: 500 }));
+    await collectEvents(
+      streamCommandCode(makeModel(), context, {
+        apiKey: "mock-key",
+        maxTokens: 500,
+      }),
+    );
 
     const body = server.lastRequestBody();
     assert.equal(objectAt(body, ["config", "workingDir"]), "/repo");
     assert.equal(objectAt(body, ["config", "date"]), "2026-05-05");
-    assert.equal(objectAt(body, ["params", "model"]), "deepseek/deepseek-v4-flash");
+    assert.equal(
+      objectAt(body, ["params", "model"]),
+      "deepseek/deepseek-v4-flash",
+    );
     assert.equal(objectAt(body, ["params", "stream"]), true);
     assert.equal(objectAt(body, ["params", "max_tokens"]), 500);
-    assert.equal(objectAt(body, ["params", "system"]), "You are a test assistant.");
-    assert.equal(objectAt(body, ["params", "messages", "1", "content", "0", "text"]), "first response");
-    assert.equal(objectAt(body, ["params", "tools", "0", "name"]), "get_weather");
+    assert.equal(
+      objectAt(body, ["params", "system"]),
+      "You are a test assistant.",
+    );
+    assert.equal(
+      objectAt(body, ["params", "messages", "1", "content", "0", "text"]),
+      "first response",
+    );
+    assert.equal(
+      objectAt(body, ["params", "tools", "0", "name"]),
+      "get_weather",
+    );
 
     const headers = server.lastRequestHeaders();
     assert.equal(headers.authorization, "Bearer mock-key");
     assert.equal(headers["x-command-code-version"], "0.24.1");
-    assert.equal(headers["x-session-id"], "00000000-0000-4000-8000-000000000000");
+    assert.equal(
+      headers["x-session-id"],
+      "00000000-0000-4000-8000-000000000000",
+    );
   });
 
   it("caps maxTokens and passes custom headers", async () => {
-    server.mockResponse({ type: "success", events: [JSON.stringify({ type: "finish", finishReason: "stop" })] });
+    server.mockResponse({
+      type: "success",
+      events: [JSON.stringify({ type: "finish", finishReason: "stop" })],
+    });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    await collectEvents(streamCommandCode(makeModel({ maxTokens: 500_000 }), makeContext(), {
-      apiKey: "mock-key",
-      maxTokens: 500_000,
-      headers: { "x-custom": "value" },
-    }));
+    await collectEvents(
+      streamCommandCode(makeModel({ maxTokens: 500_000 }), makeContext(), {
+        apiKey: "mock-key",
+        maxTokens: 500_000,
+        headers: { "x-custom": "value" },
+      }),
+    );
 
-    assert.equal(objectAt(server.lastRequestBody(), ["params", "max_tokens"]), 200_000);
+    assert.equal(
+      objectAt(server.lastRequestBody(), ["params", "max_tokens"]),
+      200_000,
+    );
     assert.equal(server.lastRequestHeaders()["x-custom"], "value");
   });
 
   it("runs onPayload and onResponse hooks", async () => {
-    server.mockResponse({ type: "success", events: [JSON.stringify({ type: "finish", finishReason: "stop" })] });
+    server.mockResponse({
+      type: "success",
+      events: [JSON.stringify({ type: "finish", finishReason: "stop" })],
+    });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
     let responseStatus = 0;
 
-    await collectEvents(streamCommandCode(makeModel(), makeContext(), {
-      apiKey: "mock-key",
-      onPayload: () => ({ replaced: true }),
-      onResponse: (response) => {
-        responseStatus = response.status;
-      },
-    }));
+    await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: "mock-key",
+        onPayload: () => ({ replaced: true }),
+        onResponse: (response) => {
+          responseStatus = response.status;
+        },
+      }),
+    );
 
     assert.equal(objectAt(server.lastRequestBody(), ["replaced"]), true);
     assert.equal(responseStatus, 200);
@@ -239,7 +332,9 @@ describe("streamCommandCode — upstream errors and malformed streams", () => {
     server.mockResponse({ type: "error", status: 429, body: "rate limited" });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    );
 
     assert.deepEqual(eventTypes(events), ["start", "error"]);
     const error = events.at(-1);
@@ -251,11 +346,18 @@ describe("streamCommandCode — upstream errors and malformed streams", () => {
   it("emits error for provider error events", async () => {
     server.mockResponse({
       type: "success",
-      events: [JSON.stringify({ type: "error", error: { message: "provider failed" } })],
+      events: [
+        JSON.stringify({
+          type: "error",
+          error: { message: "provider failed" },
+        }),
+      ],
     });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    );
 
     const error = events.at(-1);
     assert.equal(error?.type, "error");
@@ -265,7 +367,10 @@ describe("streamCommandCode — upstream errors and malformed streams", () => {
 
   it("handles SSE lines, malformed lines, split chunks, and final line without newline", async () => {
     const textEvent = `data: ${JSON.stringify({ type: "text-delta", text: "split" })}\n`;
-    const finishEvent = JSON.stringify({ type: "finish", finishReason: "max_tokens" });
+    const finishEvent = JSON.stringify({
+      type: "finish",
+      finishReason: "max_tokens",
+    });
     server.mockResponse({
       type: "success",
       chunks: [
@@ -279,11 +384,18 @@ describe("streamCommandCode — upstream errors and malformed streams", () => {
     });
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    );
 
     const done = events.at(-1);
     if (done?.type !== "done") throw new Error("expected done");
     assert.equal(done.reason, "length");
-    assert.equal(done.message.content[0]?.type === "text" ? done.message.content[0].text : "", "split");
+    assert.equal(
+      done.message.content[0]?.type === "text"
+        ? done.message.content[0].text
+        : "",
+      "split",
+    );
   });
 });

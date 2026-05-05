@@ -24,18 +24,40 @@ import { objectAt } from "./helpers.ts";
 
 describe("getApiKey()", () => {
   it("uses COMMANDCODE_API_KEY from provided env", () => {
-    assert.equal(getApiKey({ env: { COMMANDCODE_API_KEY: "env-key" }, authPaths: [] }), "env-key");
+    assert.equal(
+      getApiKey({ env: { COMMANDCODE_API_KEY: "env-key" }, authPaths: [] }),
+      "env-key",
+    );
   });
 
-  it("reads apiKey and commandcode fields from explicit auth paths", () => {
+  it("reads apiKey, commandcode, and pi OAuth credential fields from explicit auth paths", () => {
     const dir = mkdtempSync(join(tmpdir(), "cc-auth-"));
     try {
       const first = join(dir, "first.json");
       const second = join(dir, "second.json");
+      const oauth = join(dir, "oauth.json");
       writeFileSync(first, JSON.stringify({ apiKey: "file-key" }));
       writeFileSync(second, JSON.stringify({ commandcode: "fallback-key" }));
-      assert.equal(getApiKey({ env: {}, authPaths: [first, second] }), "file-key");
+      writeFileSync(
+        oauth,
+        JSON.stringify({
+          commandcode: {
+            type: "oauth",
+            access: "oauth-access-key",
+            refresh: "oauth-refresh-key",
+            expires: Date.now() + 3600000,
+          },
+        }),
+      );
+      assert.equal(
+        getApiKey({ env: {}, authPaths: [first, second] }),
+        "file-key",
+      );
       assert.equal(getApiKey({ env: {}, authPaths: [second] }), "fallback-key");
+      assert.equal(
+        getApiKey({ env: {}, authPaths: [oauth] }),
+        "oauth-access-key",
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -57,7 +79,10 @@ describe("getApiKey()", () => {
     try {
       const authDir = join(dir, ".pi", "agent");
       mkdirSync(authDir, { recursive: true });
-      writeFileSync(join(authDir, "auth.json"), JSON.stringify({ commandcode: "pi-key" }));
+      writeFileSync(
+        join(authDir, "auth.json"),
+        JSON.stringify({ commandcode: "pi-key" }),
+      );
       assert.equal(getApiKey({ env: {}, homeDir: () => dir }), "pi-key");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -68,7 +93,13 @@ describe("getApiKey()", () => {
 describe("textContent()", () => {
   it("extracts and joins text blocks", () => {
     assert.equal(
-      textContent({ content: [{ type: "text", text: "hello" }, { type: "image", data: "x" }, { type: "text", text: "world" }] }),
+      textContent({
+        content: [
+          { type: "text", text: "hello" },
+          { type: "image", data: "x" },
+          { type: "text", text: "world" },
+        ],
+      }),
       "hello\nworld",
     );
   });
@@ -92,10 +123,13 @@ describe("toJsonSchema()", () => {
     assert.deepEqual(toJsonSchema({ kind: "string" }), { type: "string" });
     assert.deepEqual(toJsonSchema({ kind: "Number" }), { type: "number" });
     assert.deepEqual(toJsonSchema({ kind: "boolean" }), { type: "boolean" });
-    assert.deepEqual(toJsonSchema({ kind: "string", enum: ["left", "right"] }), {
-      type: "string",
-      enum: ["left", "right"],
-    });
+    assert.deepEqual(
+      toJsonSchema({ kind: "string", enum: ["left", "right"] }),
+      {
+        type: "string",
+        enum: ["left", "right"],
+      },
+    );
     assert.deepEqual(
       toJsonSchema({
         kind: "object",
@@ -106,12 +140,21 @@ describe("toJsonSchema()", () => {
       }),
       {
         type: "object",
-        properties: { name: { type: "string" }, tags: { type: "array", items: { type: "string" } } },
+        properties: {
+          name: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+        },
         required: ["name"],
       },
     );
-    assert.deepEqual(toJsonSchema({ kind: "optional", wrapped: { kind: "string" } }), { type: "string" });
-    assert.deepEqual(toJsonSchema({ kind: "union", variants: [{}, { kind: "number" }] }), { type: "number" });
+    assert.deepEqual(
+      toJsonSchema({ kind: "optional", wrapped: { kind: "string" } }),
+      { type: "string" },
+    );
+    assert.deepEqual(
+      toJsonSchema({ kind: "union", variants: [{}, { kind: "number" }] }),
+      { type: "number" },
+    );
   });
 
   it("preserves explicit required arrays and handles unknown values", () => {
@@ -174,7 +217,12 @@ describe("messagesToCC()", () => {
         content: [
           { type: "thinking", thinking: "I will read" },
           { type: "text", text: "Sure" },
-          { type: "toolCall", id: "c1", name: "read", arguments: { path: "/tmp/test" } },
+          {
+            type: "toolCall",
+            id: "c1",
+            name: "read",
+            arguments: { path: "/tmp/test" },
+          },
         ],
       },
       {
@@ -182,7 +230,10 @@ describe("messagesToCC()", () => {
         toolCallId: "c1",
         toolName: "read",
         isError: false,
-        content: [{ type: "text", text: "hello" }, { type: "text", text: "world" }],
+        content: [
+          { type: "text", text: "hello" },
+          { type: "text", text: "world" },
+        ],
       },
     ]);
 
@@ -191,7 +242,32 @@ describe("messagesToCC()", () => {
     assert.equal(objectAt(result, ["1", "content", "0", "type"]), "reasoning");
     assert.equal(objectAt(result, ["1", "content", "2", "type"]), "tool-call");
     assert.equal(objectAt(result, ["2", "role"]), "tool");
-    assert.equal(objectAt(result, ["2", "content", "0", "output", "value"]), "hello\nworld");
+    assert.equal(
+      objectAt(result, ["2", "content", "0", "output", "value"]),
+      "hello\nworld",
+    );
+  });
+
+  it("drops orphaned tool calls that have no matching tool result", () => {
+    const result = messagesToCC([
+      { role: "user", content: "edit a file" },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "I will edit it" },
+          {
+            type: "toolCall",
+            id: "missing-result",
+            name: "edit",
+            arguments: { path: "x" },
+          },
+        ],
+      },
+    ]);
+
+    assert.equal(objectAt(result, ["1", "role"]), "assistant");
+    assert.equal(objectAt(result, ["1", "content", "0", "type"]), "text");
+    assert.equal(objectAt(result, ["1", "content", "1"]), undefined);
   });
 
   it("handles empty conversations", () => {
@@ -201,11 +277,17 @@ describe("messagesToCC()", () => {
 
 describe("parseStreamEventLine()", () => {
   it("parses plain JSON and SSE data lines", () => {
-    assert.deepEqual(parseStreamEventLine('{"type":"text-delta","text":"x"}'), { type: "text-delta", text: "x" });
-    assert.deepEqual(parseStreamEventLine('data: {"type":"finish","finishReason":"stop"}'), {
-      type: "finish",
-      finishReason: "stop",
+    assert.deepEqual(parseStreamEventLine('{"type":"text-delta","text":"x"}'), {
+      type: "text-delta",
+      text: "x",
     });
+    assert.deepEqual(
+      parseStreamEventLine('data: {"type":"finish","finishReason":"stop"}'),
+      {
+        type: "finish",
+        finishReason: "stop",
+      },
+    );
   });
 
   it("ignores comments, event labels, done markers, and malformed JSON", () => {

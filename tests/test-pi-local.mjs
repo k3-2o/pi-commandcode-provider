@@ -6,7 +6,15 @@
 
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
@@ -59,7 +67,12 @@ const server = createServer((req, res) => {
   }
 
   requestCount += 1;
-  lastRequestHeaders = Object.fromEntries(Object.entries(req.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(", ") : value ?? ""]));
+  lastRequestHeaders = Object.fromEntries(
+    Object.entries(req.headers).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value.join(", ") : (value ?? ""),
+    ]),
+  );
 
   let body = "";
   req.on("data", (chunk) => {
@@ -76,8 +89,12 @@ const server = createServer((req, res) => {
       "Content-Type": "text/plain; charset=utf-8",
       "Transfer-Encoding": "chunked",
     });
-    res.write(`${JSON.stringify({ type: "text-delta", text: "mock-pi-ok" })}\n`);
-    res.write(`${JSON.stringify({ type: "finish", finishReason: "stop", totalUsage: { inputTokens: 1, outputTokens: 1 } })}\n`);
+    res.write(
+      `${JSON.stringify({ type: "text-delta", text: "mock-pi-ok" })}\n`,
+    );
+    res.write(
+      `${JSON.stringify({ type: "finish", finishReason: "stop", totalUsage: { inputTokens: 1, outputTokens: 1 } })}\n`,
+    );
     res.end();
   });
 });
@@ -88,9 +105,11 @@ const port = typeof address === "object" && address ? address.port : 0;
 const apiBase = `http://127.0.0.1:${port}`;
 
 function hasLivePiAuth() {
-  return !!process.env.COMMANDCODE_API_KEY ||
+  return (
+    !!process.env.COMMANDCODE_API_KEY ||
     existsSync(join(homedir(), ".commandcode", "auth.json")) ||
-    existsSync(join(homedir(), ".pi", "agent", "auth.json"));
+    existsSync(join(homedir(), ".pi", "agent", "auth.json"))
+  );
 }
 
 let tempHome;
@@ -105,7 +124,10 @@ if (hasLivePiAuth()) {
   console.log("[pi-local] live pi auth not found; using mock auth fallback");
   tempHome = mkdtempSync(join(tmpdir(), "pi-cc-home-"));
   mkdirSync(join(tempHome, ".commandcode"), { recursive: true });
-  writeFileSync(join(tempHome, ".commandcode", "auth.json"), JSON.stringify({ apiKey: "mock-key" }));
+  writeFileSync(
+    join(tempHome, ".commandcode", "auth.json"),
+    JSON.stringify({ apiKey: "mock-key" }),
+  );
   env.HOME = tempHome;
   env.USERPROFILE = tempHome;
   env.COMMANDCODE_API_KEY = "mock-key";
@@ -122,7 +144,11 @@ function runPi(args, timeoutMs = 30_000) {
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill();
-      resolve({ code: -1, stdout, stderr: `${stderr}\nTIMEOUT after ${timeoutMs}ms` });
+      resolve({
+        code: -1,
+        stdout,
+        stderr: `${stderr}\nTIMEOUT after ${timeoutMs}ms`,
+      });
     }, timeoutMs);
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString("utf-8");
@@ -138,16 +164,24 @@ function runPi(args, timeoutMs = 30_000) {
 }
 
 async function runRpcQuery(timeoutMs = 30_000) {
-  const child = spawn(PI_BIN, [
-    "--mode", "rpc",
-    "-e", EXT_PATH,
-    "--provider", "commandcode",
-    "--model", TEST_MODEL,
-  ], {
-    cwd: PROJECT_DIR,
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  const child = spawn(
+    PI_BIN,
+    [
+      "--mode",
+      "rpc",
+      "-e",
+      EXT_PATH,
+      "--provider",
+      "commandcode",
+      "--model",
+      TEST_MODEL,
+    ],
+    {
+      cwd: PROJECT_DIR,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
 
   let stdout = "";
   let stderr = "";
@@ -174,7 +208,9 @@ async function runRpcQuery(timeoutMs = 30_000) {
       resolve(ok);
     };
 
-    child.stdin.write(`${JSON.stringify({ id: "prompt-1", type: "prompt", message: "say mock token" })}\n`);
+    child.stdin.write(
+      `${JSON.stringify({ id: "prompt-1", type: "prompt", message: "say mock token" })}\n`,
+    );
 
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString("utf-8");
@@ -188,13 +224,23 @@ async function runRpcQuery(timeoutMs = 30_000) {
         try {
           const event = JSON.parse(trimmed);
           events.push(event);
-          if (event.type === "response" && event.id === "prompt-1" && event.success === true) {
+          if (
+            event.type === "response" &&
+            event.id === "prompt-1" &&
+            event.success === true
+          ) {
             sawPromptAccepted = true;
           }
-          if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
+          if (
+            event.type === "message_update" &&
+            event.assistantMessageEvent?.type === "text_delta"
+          ) {
             sawTextDelta = true;
           }
-          if (event.type === "message_end" && event.message?.role === "assistant") {
+          if (
+            event.type === "message_end" &&
+            event.message?.role === "assistant"
+          ) {
             sawAssistantMessage = true;
             finish(true);
           }
@@ -212,7 +258,15 @@ async function runRpcQuery(timeoutMs = 30_000) {
   });
 
   const ok = await done;
-  return { ok, stdout, stderr, events, sawPromptAccepted, sawAssistantMessage, sawTextDelta };
+  return {
+    ok,
+    stdout,
+    stderr,
+    events,
+    sawPromptAccepted,
+    sawAssistantMessage,
+    sawTextDelta,
+  };
 }
 
 try {
@@ -224,17 +278,25 @@ try {
 
   console.log("[pi-local] print mode through real extension and mock API");
   requestCount = 0;
-  const print = await runPi([
-    "-e", EXT_PATH,
-    "-p", "say mock token",
-    "--provider", "commandcode",
-    "--model", TEST_MODEL,
-  ], 30_000);
+  const print = await runPi(
+    [
+      "-e",
+      EXT_PATH,
+      "-p",
+      "say mock token",
+      "--provider",
+      "commandcode",
+      "--model",
+      TEST_MODEL,
+    ],
+    30_000,
+  );
   assert.equal(print.code, 0, print.stderr);
   assert.match(print.stdout, /mock-pi-ok/);
   assert.equal(requestCount, 1);
   assert.ok(
-    typeof lastRequestHeaders.authorization === "string" && lastRequestHeaders.authorization.startsWith("Bearer "),
+    typeof lastRequestHeaders.authorization === "string" &&
+      lastRequestHeaders.authorization.startsWith("Bearer "),
     "should send a bearer Authorization header",
   );
   assert.equal(lastRequestBody?.params?.model, TEST_MODEL);
@@ -245,7 +307,11 @@ try {
   assert.equal(
     rpc.ok,
     true,
-    JSON.stringify({ stderr: rpc.stderr, stdout: rpc.stdout, events: rpc.events.slice(-10) }, null, 2),
+    JSON.stringify(
+      { stderr: rpc.stderr, stdout: rpc.stdout, events: rpc.events.slice(-10) },
+      null,
+      2,
+    ),
   );
   assert.equal(rpc.sawPromptAccepted, true);
   assert.equal(rpc.sawAssistantMessage, true);

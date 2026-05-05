@@ -34,12 +34,17 @@ describe("streamCommandCode — abort behavior", () => {
     controller.abort();
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() });
 
-    const events = await collectEvents(streamCommandCode(makeModel(), makeContext(), {
-      apiKey: "mock-key",
-      signal: controller.signal,
-    }));
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: "mock-key",
+        signal: controller.signal,
+      }),
+    );
 
-    assert.deepEqual(events.map((event) => event.type), ["start", "error"]);
+    assert.deepEqual(
+      events.map((event) => event.type),
+      ["start", "error"],
+    );
     const error = events.at(-1);
     assert.equal(error?.type, "error");
     if (error?.type !== "error") throw new Error("expected error");
@@ -65,13 +70,19 @@ describe("streamCommandCode — abort behavior", () => {
     setTimeout(() => controller.abort(), 50);
     const events = await collectEvents(stream, 2_000);
 
-    assert.ok(events.some((event) => event.type === "text_delta"), "stream should process data before abort");
+    assert.ok(
+      events.some((event) => event.type === "text_delta"),
+      "stream should process data before abort",
+    );
     const error = events.at(-1);
     assert.equal(error?.type, "error");
     if (error?.type !== "error") throw new Error("expected error");
     assert.equal(error.reason, "aborted");
     assert.equal(error.error.errorMessage, "Request aborted");
     await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.ok(server.responseClosedBeforeEnd(), "abort should close the hanging upstream response");
+    assert.ok(
+      server.responseClosedBeforeEnd(),
+      "abort should close the hanging upstream response",
+    );
   });
 });
