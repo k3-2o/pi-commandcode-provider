@@ -31,9 +31,7 @@ const entries: Record<string, { input: number; output: number }> = {}
 for (const line of costBlock.split("\n")) {
   const trimmed = line.trim()
   if (!trimmed || trimmed.startsWith("//")) continue
-  const entryMatch = trimmed.match(
-    /^"([^"]+)":\s*\{\s*input:\s*([\d.]+),\s*output:\s*([\d.]+)/,
-  )
+  const entryMatch = trimmed.match(/^"([^"]+)":\s*\{\s*input:\s*([\d.]+),\s*output:\s*([\d.]+)/)
   if (entryMatch) {
     entries[entryMatch[1]] = {
       input: Number(entryMatch[2]),
@@ -80,17 +78,13 @@ describe("MODEL_COSTS pricing overlay", () => {
     const claudeModels = ["claude-sonnet-4-6", "claude-opus-4-7"]
     for (const id of claudeModels) {
       const fullEntryMatch = costBlock.match(
-        new RegExp(`"${id.replace(/\//g, "\\\\")}":\\s*\\{[^}]+cacheRead:\\s*([\\d.]+)[^}]+cacheWrite:\\s*([\\d.]+)`),
+        new RegExp(
+          `"${id.replace(/\//g, "\\\\")}":\\s*\\{[^}]+cacheRead:\\s*([\\d.]+)[^}]+cacheWrite:\\s*([\\d.]+)`,
+        ),
       )
       assert.ok(fullEntryMatch, `"${id}" should have cacheRead and cacheWrite fields`)
-      assert.ok(
-        Number(fullEntryMatch[1]) > 0,
-        `"${id}" cacheRead should be > 0`,
-      )
-      assert.ok(
-        Number(fullEntryMatch[2]) > 0,
-        `"${id}" cacheWrite should be > 0`,
-      )
+      assert.ok(Number(fullEntryMatch[1]) > 0, `"${id}" cacheRead should be > 0`)
+      assert.ok(Number(fullEntryMatch[2]) > 0, `"${id}" cacheWrite should be > 0`)
     }
   })
 })

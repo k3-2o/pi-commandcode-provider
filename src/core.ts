@@ -263,7 +263,7 @@ export function createStreamCommandCode(deps: CoreDependencies) {
             } else {
               const tc = output.content[thinkingIdx]
               if (tc && tc.type === "thinking") {
-                (tc as { thinking: string }).thinking += delta
+                ;(tc as { thinking: string }).thinking += delta
               }
             }
             stream.push({
