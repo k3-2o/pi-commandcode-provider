@@ -185,8 +185,8 @@ describe("login()", () => {
       onAuth(params: { url: string }) {
         authUrl = params.url
       },
-      onPrompt(_params: { message: string }): Promise<string> {
-        throw new Error("onPrompt should not be called in browser flow")
+      async onPrompt(_params: { message: string }): Promise<string> {
+        return ""
       },
     }
 
@@ -248,6 +248,7 @@ describe("login()", () => {
         },
         async onPrompt(params: { message: string }): Promise<string> {
           promptMessage = params.message
+          if (promptMessage.includes("press Enter for browser login")) return ""
           return "\u001b[200~  user_manualApiKey\n\u001b[201~"
         },
       })
@@ -263,14 +264,48 @@ describe("login()", () => {
     }
   })
 
+  it("accepts a pasted API key without starting browser login", async () => {
+    let authOpened = false
+    const result = await login({
+      onAuth(_params: { url: string }) {
+        authOpened = true
+      },
+      async onPrompt(_params: { message: string }): Promise<string> {
+        return "\u001b[200~  user_directApiKey\n\u001b[201~"
+      },
+    })
+
+    assert.equal(authOpened, false)
+    assert.equal(result.access, "user_directApiKey")
+    assert.equal(result.refresh, "user_directApiKey")
+    assert.ok(result.expires > Date.now(), "expiry should be far in the future")
+  })
+
+  it("can explicitly choose the API key prompt", async () => {
+    const prompts: string[] = []
+    const result = await login({
+      onAuth(_params: { url: string }) {
+        throw new Error("onAuth should not be called for direct API key flow")
+      },
+      async onPrompt(params: { message: string }): Promise<string> {
+        prompts.push(params.message)
+        return prompts.length === 1 ? "key" : "user_promptedApiKey"
+      },
+    })
+
+    assert.equal(prompts.length, 2)
+    assert.equal(result.access, "user_promptedApiKey")
+    assert.equal(result.refresh, "user_promptedApiKey")
+  })
+
   it("rejects on state token mismatch", async () => {
     let authUrl = ""
     const callbacks = {
       onAuth(params: { url: string }) {
         authUrl = params.url
       },
-      onPrompt(_params: { message: string }): Promise<string> {
-        throw new Error("should not prompt")
+      async onPrompt(_params: { message: string }): Promise<string> {
+        return ""
       },
     }
 

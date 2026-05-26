@@ -1,23 +1,14 @@
 #!/usr/bin/env node
 /**
  * Local end-to-end test: loads the real extension through the pi CLI while the
- * Command Code API is replaced by a deterministic local mock server.
+ * Command Code Provider API is replaced by a deterministic local mock server.
  */
 
 import assert from "node:assert/strict"
 import { spawn, spawnSync } from "node:child_process"
-import {
-  accessSync,
-  constants,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
+import { accessSync, constants } from "node:fs"
 import { createServer } from "node:http"
-import { homedir, tmpdir } from "node:os"
-import { delimiter, dirname, join, resolve } from "node:path"
+import { delimiter, dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -57,6 +48,7 @@ if (piCheck.error) {
 
 let requestCount = 0
 let modelListRequestCount = 0
+let alphaGenerateRequestCount = 0
 let lastRequestBody
 let lastRequestHeaders = {}
 
@@ -90,7 +82,14 @@ const server = createServer((req, res) => {
     return
   }
 
-  if (req.method !== "POST" || req.url !== "/alpha/generate") {
+  if (req.method === "POST" && req.url === "/alpha/generate") {
+    alphaGenerateRequestCount += 1
+    res.writeHead(410)
+    res.end("Do not use internal API")
+    return
+  }
+
+  if (req.method !== "POST" || req.url !== "/provider/v1/chat/completions") {
     res.writeHead(404)
     res.end("Not found")
     return
@@ -116,13 +115,33 @@ const server = createServer((req, res) => {
     }
 
     res.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Transfer-Encoding": "chunked",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
     })
-    res.write(`${JSON.stringify({ type: "text-delta", text: "mock-pi-ok" })}\n`)
     res.write(
-      `${JSON.stringify({ type: "finish", finishReason: "stop", totalUsage: { inputTokens: 1, outputTokens: 1 } })}\n`,
+      `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
+      })}\n\n`,
     )
+    res.write(
+      `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        choices: [{ index: 0, delta: { content: "mock-pi-ok" }, finish_reason: null }],
+      })}\n\n`,
+    )
+    res.write(
+      `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      })}\n\n`,
+    )
+    res.write("data: [DONE]\n\n")
     res.end()
   })
 })
@@ -130,33 +149,13 @@ const server = createServer((req, res) => {
 await new Promise((resolve) => server.listen(0, resolve))
 const address = server.address()
 const port = typeof address === "object" && address ? address.port : 0
-const apiBase = `http://127.0.0.1:${port}`
+const apiRoot = `http://127.0.0.1:${port}`
 
-function hasLivePiAuth() {
-  return (
-    !!process.env.COMMANDCODE_API_KEY ||
-    existsSync(join(homedir(), ".commandcode", "auth.json")) ||
-    existsSync(join(homedir(), ".pi", "agent", "auth.json"))
-  )
-}
-
-let tempHome
 const env = {
   ...process.env,
-  COMMANDCODE_API_BASE: apiBase,
-  COMMANDCODE_MODELS_URL: `${apiBase}/provider/v1/models`,
-}
-
-if (hasLivePiAuth()) {
-  console.log("[pi-local] using live pi auth")
-} else {
-  console.log("[pi-local] live pi auth not found; using mock auth fallback")
-  tempHome = mkdtempSync(join(tmpdir(), "pi-cc-home-"))
-  mkdirSync(join(tempHome, ".commandcode"), { recursive: true })
-  writeFileSync(join(tempHome, ".commandcode", "auth.json"), JSON.stringify({ apiKey: "mock-key" }))
-  env.HOME = tempHome
-  env.USERPROFILE = tempHome
-  env.COMMANDCODE_API_KEY = "mock-key"
+  COMMANDCODE_API_BASE: `${apiRoot}/provider/v1`,
+  COMMANDCODE_MODELS_URL: `${apiRoot}/provider/v1/models`,
+  COMMANDCODE_API_KEY: "mock-key",
 }
 
 function runPi(args, timeoutMs = 30_000) {
@@ -299,8 +298,9 @@ try {
   assert.match(list.stdout, /Qwen\/Qwen3\.7-Max/)
   assert.equal(modelListRequestCount, 1)
 
-  console.log("[pi-local] print mode through real extension and mock API")
+  console.log("[pi-local] print mode through real extension and mock Provider API")
   requestCount = 0
+  alphaGenerateRequestCount = 0
   const print = await runPi(
     [
       "--no-extensions",
@@ -318,15 +318,17 @@ try {
   assert.equal(print.code, 0, print.stderr)
   assert.match(print.stdout, /mock-pi-ok/)
   assert.equal(requestCount, 1)
+  assert.equal(alphaGenerateRequestCount, 0)
   assert.ok(
     typeof lastRequestHeaders.authorization === "string" &&
       lastRequestHeaders.authorization.startsWith("Bearer "),
     "should send a bearer Authorization header",
   )
-  assert.equal(lastRequestBody?.params?.model, TEST_MODEL)
+  assert.equal(lastRequestBody?.model, TEST_MODEL)
 
-  console.log("[pi-local] RPC prompt through real extension and mock API")
+  console.log("[pi-local] RPC prompt through real extension and mock Provider API")
   requestCount = 0
+  alphaGenerateRequestCount = 0
   const rpc = await runRpcQuery()
   assert.equal(
     rpc.ok,
@@ -341,9 +343,9 @@ try {
   assert.equal(rpc.sawAssistantMessage, true)
   assert.equal(rpc.sawTextDelta, true)
   assert.equal(requestCount, 1)
+  assert.equal(alphaGenerateRequestCount, 0)
 
   console.log("[pi-local] PASS")
 } finally {
   await new Promise((resolve) => server.close(resolve))
-  if (tempHome) rmSync(tempHome, { recursive: true, force: true })
 }
