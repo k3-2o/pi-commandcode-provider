@@ -40,7 +40,7 @@ Then reload pi:
 
 Set your Command Code API key using one of these methods:
 
-### 1. Login flow (recommended)
+### 1. Login flow: paste API key (recommended)
 
 In pi, run:
 
@@ -48,14 +48,9 @@ In pi, run:
 /login
 ```
 
-Then select **Command Code** from the provider list. The login flow lets you either:
+Then select **Command Code** from the provider list. Type `key` or paste your Studio API key directly. The key is stored in pi's auth file.
 
-- press Enter for the current browser-assisted login, or
-- type `key` / paste a Studio API key directly.
-
-Browser login opens Command Code in your browser and stores the returned API key in pi's auth file. If the browser shows "Copy your API key" because automatic transfer failed, copy that key and paste it into the pi terminal prompt.
-
-> Note: `/login commandcode` is not supported by pi currently; use interactive `/login` and select Command Code.
+> Recommended: use a Command Code Studio API key with the official Provider API.
 
 ### 2. Environment variable
 
@@ -80,6 +75,14 @@ Or use pi's auth file at `~/.pi/agent/auth.json`:
   "commandcode": "user_..."
 }
 ```
+
+### Legacy browser-assisted login
+
+The previous browser-assisted login flow is still available by pressing Enter at the Command Code login prompt. It opens Command Code in your browser and waits for the returned API key.
+
+> Warning: this legacy browser flow follows Command Code's CLI auth flow. In [#5](https://github.com/patlux/pi-commandcode-provider/issues/5), Command Code warned that use of reverse-engineered/internal paths may lead to accounts being banned. Prefer the API key flow above with the official Provider API.
+>
+> Note: `/login commandcode` is not supported by pi currently; use interactive `/login` and select Command Code.
 
 ## Usage
 
