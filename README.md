@@ -1,10 +1,10 @@
 # pi-commandcode-provider
 
-A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to the [Command Code](https://commandcode.ai) API.
+A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to the official [Command Code Provider API](https://commandcode.ai/docs/provider-api).
 
 > **Disclaimer:** This is an unofficial, community-maintained package. I am not affiliated with, endorsed by, or connected to Command Code in any way. This provider simply forwards requests to the public Command Code API using your own API key.
 
-> **Note:** This package only provides a model _provider_. It does **not** include an API key. You must bring your own Command Code API key or subscription.
+> **Note:** This package only provides a model _provider_. It does **not** include an API key. You must bring your own Command Code API key and a plan that can use the Provider API.
 
 > 💰 **Current offers:** Command Code offers [4× usage of DeepSeek V4 Pro](https://commandcode.ai/docs/resources/pricing-limits#deepseek-v4-pro-4x-usage) and [2× usage of Qwen 3.7 Max](https://commandcode.ai/docs/resources/pricing-limits#qwen-3.7-max-2x-usage).
 
@@ -40,7 +40,7 @@ Then reload pi:
 
 Set your Command Code API key using one of these methods:
 
-### 1. Browser login (recommended)
+### 1. Login flow (recommended)
 
 In pi, run:
 
@@ -48,11 +48,12 @@ In pi, run:
 /login
 ```
 
-Then select **Command Code** from the provider list.
+Then select **Command Code** from the provider list. The login flow lets you either:
 
-<img width="1520" height="554" alt="image" src="https://github.com/user-attachments/assets/071e929a-6f49-4803-bfec-7a31368fb12a" />
+- press Enter for the current browser-assisted login, or
+- type `key` / paste a Studio API key directly.
 
-This opens Command Code in your browser and stores the returned API key in pi's auth file. If the browser shows "Copy your API key" because automatic transfer failed, copy that key and paste it into the pi terminal prompt.
+Browser login opens Command Code in your browser and stores the returned API key in pi's auth file. If the browser shows "Copy your API key" because automatic transfer failed, copy that key and paste it into the pi terminal prompt.
 
 > Note: `/login commandcode` is not supported by pi currently; use interactive `/login` and select Command Code.
 
@@ -94,15 +95,17 @@ Any query will then use the Command Code API. You can list available models with
 /models
 ```
 
-## Model discovery
+## Provider API
 
-On startup, the provider fetches:
+The provider uses the official Command Code Provider API:
 
 ```txt
-https://api.commandcode.ai/provider/v1/models
+https://api.commandcode.ai/provider/v1
 ```
 
-For tests or local mocks, override it with `COMMANDCODE_MODELS_URL`.
+On startup, it fetches models from `/models`. Non-Claude models use `/chat/completions`; Claude models use `/messages`.
+
+For tests or local mocks, override the API base with `COMMANDCODE_API_BASE` and the model-list URL with `COMMANDCODE_MODELS_URL`.
 
 ## Publish
 

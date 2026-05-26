@@ -1,4 +1,7 @@
-export const DEFAULT_MODELS_URL = "https://api.commandcode.ai/provider/v1/models"
+import type { Api } from "@mariozechner/pi-ai"
+
+export const DEFAULT_PROVIDER_API_BASE = "https://api.commandcode.ai/provider/v1"
+export const DEFAULT_MODELS_URL = `${DEFAULT_PROVIDER_API_BASE}/models`
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 65_536
 
@@ -11,6 +14,7 @@ interface ApiModel {
 export interface CommandCodeModel {
   id: string
   name: string
+  api: Api
   reasoning: boolean
   contextWindow: number
   maxTokens: number
@@ -47,6 +51,17 @@ function parseApiModel(value: unknown): ApiModel {
   }
 }
 
+export function apiForModelId(id: string): Api {
+  if (id.startsWith("claude-")) return "anthropic-messages"
+  return "openai-completions"
+}
+
+export function baseUrlForModel(apiBase: string, api: Api): string {
+  const normalized = apiBase.replace(/\/+$/g, "")
+  if (api !== "anthropic-messages") return normalized
+  return normalized.endsWith("/v1") ? normalized.slice(0, -3) : normalized
+}
+
 export function commandCodeModelsFromApiResponse(value: unknown): readonly CommandCodeModel[] {
   if (!isRecord(value)) throw new Error("Expected models response to be an object")
   if (value.object !== "list") throw new Error("Expected models response object to be 'list'")
@@ -57,6 +72,7 @@ export function commandCodeModelsFromApiResponse(value: unknown): readonly Comma
   return data.map(parseApiModel).map((model) => ({
     id: model.id,
     name: `${model.name} (CC)`,
+    api: apiForModelId(model.id),
     reasoning: true,
     contextWindow: model.contextLength,
     maxTokens: Math.min(model.contextLength, DEFAULT_MAX_OUTPUT_TOKENS),
