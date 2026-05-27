@@ -12,8 +12,8 @@
  * Models are fetched from Command Code's Provider API at startup.
  */
 
-import { calculateCost, createAssistantMessageEventStream } from "@mariozechner/pi-ai"
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent"
+import { calculateCost, createAssistantMessageEventStream } from "@earendil-works/pi-ai"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 
 import { COMMAND_CODE_CLI_VERSION, createStreamCommandCode, DEFAULT_API_BASE } from "./src/core.ts"
 import { DEFAULT_MODELS_URL, fetchCommandCodeModels } from "./src/models.ts"
