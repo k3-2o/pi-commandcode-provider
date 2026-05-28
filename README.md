@@ -122,7 +122,7 @@ Command Code does not yet expose model pricing through its Provider API. The pro
 - Models present in `MODEL_COSTS` show their real per-million-token rates (including promotional deals like the DeepSeek V4 Pro 4× discount and Qwen 3.7 Max 2× discount).
 - Models **not** in the table fall back to zero cost. When the Provider API adds a `cost` field, the static table can be removed.
 
-To add or update a price, edit the `MODEL_COSTS` record in `index.ts` and update the corresponding test in `tests/test-models.ts`.
+To add or update a price, edit the `MODEL_COSTS` record in `index.ts` and update the corresponding test in `tests/test-pricing.ts`.
 
 ## Contributing
 
