@@ -202,6 +202,66 @@ describe("streamCommandCode — successful streams", () => {
     if (done?.type !== "done") throw new Error("expected done")
     assert.equal(done.message.content[0]?.type, "thinking")
   })
+
+  it("closes thinking block before text when reasoning-end is missing", async () => {
+    server.mockResponse({
+      type: "success",
+      events: [
+        JSON.stringify({ type: "reasoning-start" }),
+        JSON.stringify({ type: "reasoning-delta", text: "thinking" }),
+        JSON.stringify({ type: "text-delta", text: "answer" }),
+        JSON.stringify({ type: "finish", finishReason: "stop" }),
+      ],
+    })
+    const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
+
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    )
+
+    assert.deepEqual(eventTypes(events), [
+      "start",
+      "thinking_start",
+      "thinking_delta",
+      "thinking_end",
+      "text_start",
+      "text_delta",
+      "text_end",
+      "done",
+    ])
+  })
+
+  it("closes thinking block before tool-call when reasoning-end is missing", async () => {
+    server.mockResponse({
+      type: "success",
+      events: [
+        JSON.stringify({ type: "reasoning-start" }),
+        JSON.stringify({ type: "reasoning-delta", text: "thinking" }),
+        JSON.stringify({
+          type: "tool-call",
+          toolCallId: "call_1",
+          toolName: "read_file",
+          input: JSON.stringify({ path: "/tmp/x" }),
+        }),
+        JSON.stringify({ type: "finish", finishReason: "tool-calls" }),
+      ],
+    })
+    const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
+
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+    )
+
+    assert.deepEqual(eventTypes(events), [
+      "start",
+      "thinking_start",
+      "thinking_delta",
+      "thinking_end",
+      "toolcall_start",
+      "toolcall_end",
+      "done",
+    ])
+  })
 })
 
 describe("streamCommandCode — request serialization", () => {

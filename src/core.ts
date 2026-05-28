@@ -223,6 +223,7 @@ export function createStreamCommandCode(deps: CoreDependencies) {
 
         switch (event.type) {
           case "text-delta": {
+            endThinking()
             if (!textBlock) {
               textBlock = { type: "text", text: "" }
               output.content.push(textBlock)
@@ -286,6 +287,7 @@ export function createStreamCommandCode(deps: CoreDependencies) {
 
           case "tool-call": {
             endTextBlock()
+            endThinking()
             const toolCall: ToolCallContent = {
               type: "toolCall",
               id: stringValue(event.toolCallId) ?? "",
