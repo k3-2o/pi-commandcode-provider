@@ -1,10 +1,10 @@
 # pi-commandcode-provider
 
-A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to the official [Command Code Provider API](https://commandcode.ai/docs/provider-api).
+A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to the [Command Code](https://commandcode.ai) API.
 
 > **Disclaimer:** This is an unofficial, community-maintained package. I am not affiliated with, endorsed by, or connected to Command Code in any way. This provider simply forwards requests to the public Command Code API using your own API key.
 
-> **Note:** This package only provides a model _provider_. It does **not** include an API key. You must bring your own Command Code API key and a plan that can use the Provider API.
+> **Note:** This package only provides a model _provider_. It does **not** include an API key. You must bring your own Command Code API key or subscription.
 
 > 💰 **Current offers:** Command Code offers [4× usage of DeepSeek V4 Pro](https://commandcode.ai/docs/resources/pricing-limits#deepseek-v4-pro-4x-usage) and [2× usage of Qwen 3.7 Max](https://commandcode.ai/docs/resources/pricing-limits#qwen-3.7-max-2x-usage).
 
@@ -36,11 +36,23 @@ Then reload pi:
 /reload
 ```
 
+### Oh My Pi
+
+```sh
+omp plugin install pi-commandcode-provider
+```
+
+Then restart OMP or run:
+
+```txt
+/reload
+```
+
 ## Setup
 
 Set your Command Code API key using one of these methods:
 
-### 1. Login flow: paste API key (recommended)
+### 1. Browser login (recommended)
 
 In pi, run:
 
@@ -48,9 +60,13 @@ In pi, run:
 /login
 ```
 
-Then select **Command Code** from the provider list. Type `key` or paste your Studio API key directly. The key is stored in pi's auth file.
+Then select **Command Code** from the provider list.
 
-> Recommended: use a Command Code Studio API key with the official Provider API.
+<img width="1520" height="554" alt="image" src="https://github.com/user-attachments/assets/071e929a-6f49-4803-bfec-7a31368fb12a" />
+
+This opens Command Code in your browser and stores the returned API key in pi's auth file. If the browser shows "Copy your API key" because automatic transfer failed, copy that key and paste it into the pi terminal prompt.
+
+> Note: `/login commandcode` is not supported by pi currently; use interactive `/login` and select Command Code.
 
 ### 2. Environment variable
 
@@ -68,21 +84,24 @@ Create `~/.commandcode/auth.json`:
 }
 ```
 
-Or use pi's auth file at `~/.pi/agent/auth.json`:
+The official Command Code CLI auth shape is also supported:
+
+```json
+{
+  "command-code": {
+    "type": "api",
+    "key": "user_..."
+  }
+}
+```
+
+Or use a pi/OMP auth file at `~/.pi/agent/auth.json` or `~/.omp/agent/auth.json`:
 
 ```json
 {
   "commandcode": "user_..."
 }
 ```
-
-### Legacy browser-assisted login
-
-The previous browser-assisted login flow is still available by pressing Enter at the Command Code login prompt. It opens Command Code in your browser and waits for the returned API key.
-
-> Warning: this legacy browser flow follows Command Code's CLI auth flow. In [#5](https://github.com/patlux/pi-commandcode-provider/issues/5), Command Code warned that use of reverse-engineered/internal paths may lead to accounts being banned. Prefer the API key flow above with the official Provider API.
->
-> Note: `/login commandcode` is not supported by pi currently; use interactive `/login` and select Command Code.
 
 ## Usage
 
@@ -92,30 +111,47 @@ After installing and setting your API key, select a Command Code model in pi:
 /model deepseek/deepseek-v4-flash
 ```
 
-Any query will then use the Command Code API. You can list available models within pi:
-
-```txt
-/models
-```
-
-## Provider API
-
-The provider uses the official Command Code Provider API:
-
-```txt
-https://api.commandcode.ai/provider/v1
-```
-
-On startup, it fetches models from `/models`. Non-Claude models use `/chat/completions`; Claude models use `/messages`.
-
-For tests or local mocks, override the API base with `COMMANDCODE_API_BASE` and the model-list URL with `COMMANDCODE_MODELS_URL`.
-
-## Publish
+Any query will then use the Command Code API. You can list available models:
 
 ```sh
-npm login
-npm publish --access public
+pi -e index.ts --list-models   # or /models within pi
+omp -e index.ts --list-models
 ```
+
+In OMP, use the provider-qualified model name:
+
+```sh
+omp -p "hello" --model commandcode/deepseek/deepseek-v4-flash
+```
+
+OMP currently resolves `--provider commandcode --model ...` before extension providers are loaded, so prefer `--model commandcode/<model-id>`. <!-- TODO: remove this note once OMP fixes provider resolution order for extension-loaded providers -->
+
+## Model discovery
+
+On startup, the provider fetches:
+
+```txt
+https://api.commandcode.ai/provider/v1/models
+```
+
+For tests or local mocks, override it with `COMMANDCODE_MODELS_URL`.
+
+## Pricing
+
+Command Code does not yet expose model pricing through its Provider API. The provider ships a static cost table (`MODEL_COSTS` in `index.ts`) for known models so that pi can display per-model pricing.
+
+- Models present in `MODEL_COSTS` show their real per-million-token rates (including promotional deals like the DeepSeek V4 Pro 4× discount and Qwen 3.7 Max 2× discount).
+- Models **not** in the table fall back to zero cost. When the Provider API adds a `cost` field, the static table can be removed.
+
+To add or update a price, edit the `MODEL_COSTS` record in `index.ts` and update the corresponding test in `tests/test-pricing.ts`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR expectations, and commit message rules.
+
+## Release
+
+See [RELEASE.md](RELEASE.md) for the prerelease, npm smoke-test, stable publish, git tag, and GitHub follow-up checklist.
 
 ## License
 
