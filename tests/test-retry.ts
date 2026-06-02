@@ -16,6 +16,8 @@ import {
   type MockCommandCodeServer,
 } from "./helpers.ts"
 
+const TEST_API_KEY = "option-key"
+
 let server: MockCommandCodeServer
 
 before(async () => {
@@ -49,7 +51,10 @@ describe("streamCommandCode — retry on transient errors", () => {
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
 
     const events = await collectEvents(
-      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        maxRetries: 2,
+      }),
     )
 
     assert.equal(server.requestCount(), 2)
@@ -70,7 +75,10 @@ describe("streamCommandCode — retry on transient errors", () => {
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
 
     const events = await collectEvents(
-      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        maxRetries: 2,
+      }),
     )
 
     assert.equal(server.requestCount(), 2)
@@ -82,7 +90,7 @@ describe("streamCommandCode — retry on transient errors", () => {
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
 
     const events = await collectEvents(
-      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      streamCommandCode(makeModel(), makeContext(), { apiKey: TEST_API_KEY }),
     )
 
     assert.equal(server.requestCount(), 1)
@@ -98,7 +106,7 @@ describe("streamCommandCode — retry on transient errors", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         maxRetries: 3,
       }),
     )
@@ -136,7 +144,10 @@ describe("streamCommandCode — Retry-After header", () => {
     })
 
     const events = await collectEvents(
-      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        maxRetries: 2,
+      }),
     )
 
     assert.equal(server.requestCount(), 2)
@@ -155,7 +166,7 @@ describe("streamCommandCode — Retry-After header", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         maxRetryDelayMs: 10_000,
       }),
     )
@@ -165,6 +176,41 @@ describe("streamCommandCode — Retry-After header", () => {
     const lastMax = events.at(-1)
     if (lastMax?.type !== "error") throw new Error("expected error")
     assert.match(lastMax.error.errorMessage ?? "", /exceeds max/)
+  })
+
+  it("does not cap Retry-After when maxRetryDelayMs is 0", async () => {
+    let delayCalled = false
+    server.mockResponseQueue([
+      {
+        type: "error",
+        status: 429,
+        body: "rate limited",
+        headers: { "retry-after": "120" },
+      },
+      {
+        type: "success",
+        events: [JSON.stringify({ type: "finish", finishReason: "stop" })],
+      },
+    ])
+    const { streamCommandCode } = createTestDeps({
+      apiBase: server.baseUrl(),
+      delay: async (ms: number) => {
+        delayCalled = true
+        assert.equal(ms, 120_000)
+      },
+    })
+
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        maxRetries: 1,
+        maxRetryDelayMs: 0,
+      }),
+    )
+
+    assert.equal(server.requestCount(), 2)
+    assert.equal(events.at(-1)?.type, "done")
+    assert.ok(delayCalled)
   })
 })
 
@@ -189,14 +235,66 @@ describe("streamCommandCode — timeout", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         timeoutMs: 50,
+        maxRetries: 2,
       }),
       5_000,
     )
 
     assert.equal(server.requestCount(), 2)
     assert.deepEqual(eventTypes(events), ["start", "text_start", "text_delta", "text_end", "done"])
+  })
+
+  it("retries when the response starts but the stream hangs before finish", async () => {
+    server.mockResponseQueue([
+      {
+        type: "success",
+        events: [],
+        hangAfterLast: true,
+      },
+      {
+        type: "success",
+        events: [
+          JSON.stringify({ type: "text-delta", text: "ok" }),
+          JSON.stringify({ type: "finish", finishReason: "stop" }),
+        ],
+      },
+    ])
+    const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
+
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        timeoutMs: 50,
+        maxRetries: 2,
+      }),
+      5_000,
+    )
+
+    assert.equal(server.requestCount(), 2)
+    assert.deepEqual(eventTypes(events), ["start", "text_start", "text_delta", "text_end", "done"])
+  })
+
+  it("does NOT retry on timeout after partial text-delta was emitted", async () => {
+    server.mockResponse({
+      type: "success",
+      events: [JSON.stringify({ type: "text-delta", text: "partial" })],
+      hangAfterLast: true,
+    })
+    const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
+
+    const events = await collectEvents(
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        timeoutMs: 50,
+        maxRetries: 2,
+      }),
+      5_000,
+    )
+
+    assert.equal(server.requestCount(), 1)
+    assert.deepEqual(eventTypes(events), ["start", "text_start", "text_delta", "error"])
   })
 
   it("emits error when all retry attempts time out", async () => {
@@ -210,7 +308,7 @@ describe("streamCommandCode — timeout", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         timeoutMs: 50,
         maxRetries: 1,
       }),
@@ -242,7 +340,7 @@ describe("streamCommandCode — abort cancels retry loop", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         signal: controller.signal,
         maxRetries: 10,
       }),
@@ -258,14 +356,13 @@ describe("streamCommandCode — abort cancels retry loop", () => {
 })
 
 describe("streamCommandCode — retry defaults", () => {
-  it("uses default maxRetries of 2 when not specified", async () => {
+  it("uses default maxRetries of 0 when not specified", async () => {
     server.mockResponse({ type: "error", status: 500, body: "error" })
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
 
-    await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }))
+    await collectEvents(streamCommandCode(makeModel(), makeContext(), { apiKey: TEST_API_KEY }))
 
-    // initial + 2 retries = 3
-    assert.equal(server.requestCount(), 3)
+    assert.equal(server.requestCount(), 1)
   })
 
   it("respects maxRetries: 0 (no retries)", async () => {
@@ -274,7 +371,7 @@ describe("streamCommandCode — retry defaults", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         maxRetries: 0,
       }),
     )
@@ -307,7 +404,10 @@ describe("streamCommandCode — stream-level error retry", () => {
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
 
     const events = await collectEvents(
-      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      streamCommandCode(makeModel(), makeContext(), {
+        apiKey: TEST_API_KEY,
+        maxRetries: 2,
+      }),
     )
 
     assert.equal(server.requestCount(), 2)
@@ -328,7 +428,7 @@ describe("streamCommandCode — stream-level error retry", () => {
 
     const events = await collectEvents(
       streamCommandCode(makeModel(), makeContext(), {
-        apiKey: "mock-key",
+        apiKey: TEST_API_KEY,
         maxRetries: 3,
       }),
     )
@@ -357,7 +457,7 @@ describe("streamCommandCode — stream-level error retry", () => {
     const { streamCommandCode } = createTestDeps({ apiBase: server.baseUrl() })
 
     const events = await collectEvents(
-      streamCommandCode(makeModel(), makeContext(), { apiKey: "mock-key" }),
+      streamCommandCode(makeModel(), makeContext(), { apiKey: TEST_API_KEY }),
     )
 
     // Only 1 request — no retry because content was already emitted.

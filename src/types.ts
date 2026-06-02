@@ -96,7 +96,7 @@ export interface StreamOptions {
   timeoutMs?: number
   /**
    * Maximum retry attempts for transient HTTP errors (429, 5xx).
-   * Default: 2.
+   * Default: 0 (pi agent-level retry handles visible retries when unset).
    */
   maxRetries?: number
   /**

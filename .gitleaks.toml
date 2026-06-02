@@ -8,6 +8,7 @@ title = "pi-commandcode-provider secret scan"
   paths = [
     # Test helpers with mock credentials
     "tests/test-oauth.ts",
+    "tests/test-retry.ts",
     "tests/test-stream.ts",
     "tests/test-pure-functions.ts",
     "tests/test-pi-local.mjs",
