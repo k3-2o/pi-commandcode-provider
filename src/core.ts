@@ -113,6 +113,14 @@ function abortError(message = "The operation was aborted"): DOMException {
   return new DOMException(message, "AbortError")
 }
 
+function timeoutError(timeoutMs: number | undefined): Error {
+  return new Error(
+    timeoutMs === undefined
+      ? "Command Code API request timed out"
+      : `Command Code API request timed out after ${timeoutMs}ms`,
+  )
+}
+
 function successStopReason(reason: TerminalReason): StopReason {
   if (reason === "length" || reason === "toolUse") return reason
   return "stop"
@@ -486,8 +494,9 @@ export function createStreamCommandCode(deps: CoreDependencies) {
               })
             } catch (fetchError: unknown) {
               if (controller.signal.aborted) throw abortError("Aborted")
-              if (attemptTimedOut && attempt < maxRetries) {
-                continue retryLoop
+              if (attemptTimedOut) {
+                if (attempt < maxRetries) continue retryLoop
+                throw timeoutError(timeoutMs)
               }
               throw fetchError
             }
@@ -582,6 +591,7 @@ export function createStreamCommandCode(deps: CoreDependencies) {
                 if (waitMs > 0) await delay(waitMs, controller.signal)
                 continue retryLoop
               }
+              if (attemptTimedOut) throw timeoutError(timeoutMs)
               throw streamError
             }
 

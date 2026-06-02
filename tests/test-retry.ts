@@ -318,6 +318,9 @@ describe("streamCommandCode — timeout", () => {
     // initial + 1 retry = 2
     assert.equal(server.requestCount(), 2)
     assert.deepEqual(eventTypes(events), ["start", "error"])
+    const error = events.at(-1)
+    if (error?.type !== "error") throw new Error("expected error")
+    assert.match(error.error.errorMessage ?? "", /timed out after 50ms/)
   })
 })
 
