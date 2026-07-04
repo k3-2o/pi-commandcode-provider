@@ -144,11 +144,9 @@ For tests or local mocks, override it with `COMMANDCODE_MODELS_URL`. Override th
 
 ## Zero data retention
 
-Command Code supports zero data retention on the Provider API via `x-cmd-zdr: 1`. To send that header from this provider, start pi with either:
+Command Code supports zero data retention on the Provider API via `x-cmd-zdr: 1`. To send that header from this provider, start pi with:
 
 ```sh
-CMD_ZDR=1 pi
-# or
 COMMANDCODE_ZDR=1 pi
 ```
 

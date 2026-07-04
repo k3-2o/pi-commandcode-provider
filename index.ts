@@ -31,7 +31,7 @@ const API_KEY_CONFIG = getConfiguredApiKey() ?? "$COMMANDCODE_API_KEY"
 const SUPPORTED_INPUTS: ("text" | "image")[] = ["text", "image"]
 
 function commandCodeHeaders(): Record<string, string> | undefined {
-  if (process.env.CMD_ZDR === "1" || process.env.COMMANDCODE_ZDR === "1") {
+  if (process.env.COMMANDCODE_ZDR === "1") {
     return { "x-cmd-zdr": "1" }
   }
   return undefined

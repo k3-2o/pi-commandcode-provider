@@ -4,7 +4,7 @@
 
 - Switch runtime requests to the official Command Code Provider API endpoints instead of the internal `/alpha/generate` stream.
 - Route Claude models through Anthropic Messages and all other Provider API models through OpenAI Chat Completions.
-- Support direct API-key login, Command Code CLI auth files, OMP auth files, and optional `CMD_ZDR=1` / `COMMANDCODE_ZDR=1` zero-data-retention headers.
+- Support direct API-key login, Command Code CLI auth files, OMP auth files, and optional `COMMANDCODE_ZDR=1` zero-data-retention headers.
 - Refresh Provider API model pricing and local pi/OMP smoke tests for the documented API shape.
 
 ## 0.4.1 - 2026-06-16
