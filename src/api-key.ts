@@ -11,7 +11,19 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function defaultAuthPaths(home: string): string[] {
-  return [join(home, ".commandcode", "auth.json"), join(home, ".pi", "agent", "auth.json")]
+  return [
+    join(home, ".commandcode", "auth.json"),
+    join(home, ".pi", "agent", "auth.json"),
+    join(home, ".omp", "agent", "auth.json"),
+  ]
+}
+
+function apiKeyFromCredential(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined
+
+  if (stringValue(value.type) === "oauth") return stringValue(value.access)
+  if (stringValue(value.type) === "api") return stringValue(value.key)
+  return stringValue(value.access) ?? stringValue(value.key)
 }
 
 export function getConfiguredApiKey(
@@ -39,11 +51,14 @@ export function getConfiguredApiKey(
       const commandcode = stringValue(parsed.commandcode)
       if (commandcode) return commandcode
 
-      const providerKey = isRecord(parsed.commandcode) ? parsed.commandcode : undefined
-      if (providerKey && stringValue(providerKey.type) === "oauth") {
-        const access = stringValue(providerKey.access)
-        if (access) return access
-      }
+      const providerKey = apiKeyFromCredential(parsed.commandcode)
+      if (providerKey) return providerKey
+
+      const commandCode = stringValue(parsed["command-code"])
+      if (commandCode) return commandCode
+
+      const commandCodeKey = apiKeyFromCredential(parsed["command-code"])
+      if (commandCodeKey) return commandCodeKey
     } catch {
       // Ignore malformed or unreadable auth files.
     }

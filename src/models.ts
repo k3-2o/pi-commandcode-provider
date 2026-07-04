@@ -1,4 +1,4 @@
-import type { Api } from "@mariozechner/pi-ai"
+import type { Api } from "@earendil-works/pi-ai"
 
 export const DEFAULT_PROVIDER_API_BASE = "https://api.commandcode.ai/provider/v1"
 export const DEFAULT_MODELS_URL = `${DEFAULT_PROVIDER_API_BASE}/models`

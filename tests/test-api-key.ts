@@ -14,12 +14,13 @@ describe("getConfiguredApiKey()", () => {
     )
   })
 
-  it("reads apiKey, commandcode, and pi OAuth credential fields from explicit auth paths", () => {
+  it("reads supported auth file shapes from explicit auth paths", () => {
     const dir = mkdtempSync(join(tmpdir(), "cc-auth-"))
     try {
       const first = join(dir, "first.json")
       const second = join(dir, "second.json")
       const oauth = join(dir, "oauth.json")
+      const cli = join(dir, "cli.json")
       writeFileSync(first, JSON.stringify({ apiKey: "file-key" }))
       writeFileSync(second, JSON.stringify({ commandcode: "fallback-key" }))
       writeFileSync(
@@ -33,9 +34,19 @@ describe("getConfiguredApiKey()", () => {
           },
         }),
       )
+      writeFileSync(
+        cli,
+        JSON.stringify({
+          "command-code": {
+            type: "api",
+            key: "cli-api-key",
+          },
+        }),
+      )
       assert.equal(getConfiguredApiKey({ env: {}, authPaths: [first, second] }), "file-key")
       assert.equal(getConfiguredApiKey({ env: {}, authPaths: [second] }), "fallback-key")
       assert.equal(getConfiguredApiKey({ env: {}, authPaths: [oauth] }), "oauth-access-key")
+      assert.equal(getConfiguredApiKey({ env: {}, authPaths: [cli] }), "cli-api-key")
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -52,12 +63,17 @@ describe("getConfiguredApiKey()", () => {
     }
   })
 
-  it("uses injected homeDir for default auth paths", () => {
+  it("uses injected homeDir for default pi and OMP auth paths", () => {
     const dir = mkdtempSync(join(tmpdir(), "cc-home-"))
     try {
-      const authDir = join(dir, ".pi", "agent")
-      mkdirSync(authDir, { recursive: true })
-      writeFileSync(join(authDir, "auth.json"), JSON.stringify({ commandcode: "pi-key" }))
+      const piAuthDir = join(dir, ".pi", "agent")
+      const ompAuthDir = join(dir, ".omp", "agent")
+      mkdirSync(piAuthDir, { recursive: true })
+      mkdirSync(ompAuthDir, { recursive: true })
+      writeFileSync(join(ompAuthDir, "auth.json"), JSON.stringify({ commandcode: "omp-key" }))
+      assert.equal(getConfiguredApiKey({ env: {}, homeDir: () => dir }), "omp-key")
+
+      writeFileSync(join(piAuthDir, "auth.json"), JSON.stringify({ commandcode: "pi-key" }))
       assert.equal(getConfiguredApiKey({ env: {}, homeDir: () => dir }), "pi-key")
     } finally {
       rmSync(dir, { recursive: true, force: true })

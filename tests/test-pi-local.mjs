@@ -6,17 +6,9 @@
 
 import assert from "node:assert/strict"
 import { spawn, spawnSync } from "node:child_process"
-import {
-  accessSync,
-  constants,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
+import { accessSync, constants, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:http"
-import { homedir, tmpdir } from "node:os"
+import { tmpdir } from "node:os"
 import { delimiter, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -24,6 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_DIR = resolve(__dirname, "..")
 const EXT_PATH = resolve(PROJECT_DIR, "index.ts")
 const TEST_MODEL = "deepseek/deepseek-v4-flash"
+const TEST_CLAUDE_MODEL = "claude-sonnet-4-6"
 
 function findPiBinary() {
   if (process.env.PI_BIN) return process.env.PI_BIN
@@ -56,6 +49,7 @@ if (piCheck.error) {
 }
 
 let requestCount = 0
+let anthropicRequestCount = 0
 let modelListRequestCount = 0
 let lastRequestBody
 let lastRequestHeaders = {}
@@ -84,13 +78,94 @@ const server = createServer((req, res) => {
             name: "Qwen 3.7 Max",
             context_length: 1_000_000,
           },
+          {
+            id: TEST_CLAUDE_MODEL,
+            object: "model",
+            created: 1779824324,
+            owned_by: "command-code",
+            name: "Claude Sonnet 4.6",
+            context_length: 1_000_000,
+          },
         ],
       }),
     )
     return
   }
 
-  if (req.method !== "POST" || req.url !== "/alpha/generate") {
+  if (req.method === "POST" && req.url === "/provider/v1/messages") {
+    anthropicRequestCount += 1
+    lastRequestHeaders = Object.fromEntries(
+      Object.entries(req.headers).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? value.join(", ") : (value ?? ""),
+      ]),
+    )
+
+    let body = ""
+    req.on("data", (chunk) => {
+      body += chunk.toString("utf-8")
+    })
+    req.on("end", () => {
+      try {
+        lastRequestBody = JSON.parse(body)
+      } catch {
+        lastRequestBody = undefined
+      }
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      })
+      res.write(
+        `event: message_start\ndata: ${JSON.stringify({
+          type: "message_start",
+          message: {
+            id: "msg-mock",
+            type: "message",
+            role: "assistant",
+            content: [],
+            model: TEST_CLAUDE_MODEL,
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 1, output_tokens: 0 },
+          },
+        })}\n\n`,
+      )
+      res.write(
+        `event: content_block_start\ndata: ${JSON.stringify({
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text", text: "" },
+        })}\n\n`,
+      )
+      res.write(
+        `event: content_block_delta\ndata: ${JSON.stringify({
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "mock-claude-ok" },
+        })}\n\n`,
+      )
+      res.write(
+        `event: content_block_stop\ndata: ${JSON.stringify({
+          type: "content_block_stop",
+          index: 0,
+        })}\n\n`,
+      )
+      res.write(
+        `event: message_delta\ndata: ${JSON.stringify({
+          type: "message_delta",
+          delta: { stop_reason: "end_turn", stop_sequence: null },
+          usage: { output_tokens: 1 },
+        })}\n\n`,
+      )
+      res.write(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`)
+      res.end()
+    })
+    return
+  }
+
+  if (req.method !== "POST" || req.url !== "/provider/v1/chat/completions") {
     res.writeHead(404)
     res.end("Not found")
     return
@@ -116,13 +191,32 @@ const server = createServer((req, res) => {
     }
 
     res.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Transfer-Encoding": "chunked",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
     })
-    res.write(`${JSON.stringify({ type: "text-delta", text: "mock-pi-ok" })}\n`)
     res.write(
-      `${JSON.stringify({ type: "finish", finishReason: "stop", totalUsage: { inputTokens: 1, outputTokens: 1 } })}\n`,
+      `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        created: 0,
+        model: TEST_MODEL,
+        choices: [
+          { index: 0, delta: { role: "assistant", content: "mock-pi-ok" }, finish_reason: null },
+        ],
+      })}\n\n`,
     )
+    res.write(
+      `data: ${JSON.stringify({
+        id: "chatcmpl-mock",
+        object: "chat.completion.chunk",
+        created: 0,
+        model: TEST_MODEL,
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      })}\n\n`,
+    )
+    res.write("data: [DONE]\n\n")
     res.end()
   })
 })
@@ -132,32 +226,18 @@ const address = server.address()
 const port = typeof address === "object" && address ? address.port : 0
 const apiBase = `http://127.0.0.1:${port}`
 
-function hasLivePiAuth() {
-  return (
-    !!process.env.COMMANDCODE_API_KEY ||
-    existsSync(join(homedir(), ".commandcode", "auth.json")) ||
-    existsSync(join(homedir(), ".omp", "agent", "auth.json")) ||
-    existsSync(join(homedir(), ".pi", "agent", "auth.json"))
-  )
-}
+console.log("[pi-local] using isolated mock auth")
+const tempHome = mkdtempSync(join(tmpdir(), "pi-cc-home-"))
+mkdirSync(join(tempHome, ".commandcode"), { recursive: true })
+writeFileSync(join(tempHome, ".commandcode", "auth.json"), JSON.stringify({ apiKey: "mock-key" }))
 
-let tempHome
 const env = {
   ...process.env,
-  COMMANDCODE_API_BASE: apiBase,
+  HOME: tempHome,
+  USERPROFILE: tempHome,
+  COMMANDCODE_API_KEY: "mock-key",
+  COMMANDCODE_API_BASE: `${apiBase}/provider/v1`,
   COMMANDCODE_MODELS_URL: `${apiBase}/provider/v1/models`,
-}
-
-if (hasLivePiAuth()) {
-  console.log("[pi-local] using live pi auth")
-} else {
-  console.log("[pi-local] live pi auth not found; using mock auth fallback")
-  tempHome = mkdtempSync(join(tmpdir(), "pi-cc-home-"))
-  mkdirSync(join(tempHome, ".commandcode"), { recursive: true })
-  writeFileSync(join(tempHome, ".commandcode", "auth.json"), JSON.stringify({ apiKey: "mock-key" }))
-  env.HOME = tempHome
-  env.USERPROFILE = tempHome
-  env.COMMANDCODE_API_KEY = "mock-key"
 }
 
 function runPi(args, timeoutMs = 30_000) {
@@ -325,7 +405,30 @@ try {
       lastRequestHeaders.authorization.startsWith("Bearer "),
     "should send a bearer Authorization header",
   )
-  assert.equal(lastRequestBody?.params?.model, TEST_MODEL)
+  assert.equal(lastRequestBody?.model, TEST_MODEL)
+  assert.equal(lastRequestBody?.stream, true)
+
+  console.log("[pi-local] Anthropic Messages route through real extension and mock API")
+  anthropicRequestCount = 0
+  const claudePrint = await runPi(
+    [
+      "--no-extensions",
+      "-e",
+      EXT_PATH,
+      "-p",
+      "say mock token",
+      "--provider",
+      "commandcode",
+      "--model",
+      TEST_CLAUDE_MODEL,
+    ],
+    30_000,
+  )
+  assert.equal(claudePrint.code, 0, claudePrint.stderr)
+  assert.match(claudePrint.stdout, /mock-claude-ok/)
+  assert.equal(anthropicRequestCount, 1)
+  assert.equal(lastRequestHeaders["x-api-key"], env.COMMANDCODE_API_KEY)
+  assert.equal(lastRequestBody?.model, TEST_CLAUDE_MODEL)
 
   console.log("[pi-local] RPC prompt through real extension and mock API")
   requestCount = 0
@@ -343,6 +446,7 @@ try {
   assert.equal(rpc.sawAssistantMessage, true)
   assert.equal(rpc.sawTextDelta, true)
   assert.equal(requestCount, 1)
+  assert.equal(lastRequestBody?.model, TEST_MODEL)
 
   console.log("[pi-local] PASS")
 } finally {

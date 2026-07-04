@@ -1,16 +1,22 @@
 # pi-commandcode-provider
 
-A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to the [Command Code](https://commandcode.ai) API.
+A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to the official [Command Code Provider API](https://commandcode.ai/docs/provider-api).
 
-> **Disclaimer:** This is an unofficial, community-maintained package. I am not affiliated with, endorsed by, or connected to Command Code in any way. This provider simply forwards requests to the public Command Code API using your own API key.
+> **Disclaimer:** This is an unofficial, community-maintained package. I am not affiliated with, endorsed by, or connected to Command Code in any way. This provider forwards requests to Command Code's documented Provider API using your own API key.
 
-> **Note:** This package only provides a model _provider_. It does **not** include an API key. You must bring your own Command Code API key or subscription.
+> **Note:** This package only provides a model _provider_. It does **not** include an API key. Command Code's Provider API requires the **Provider plan** or higher.
 
-> 💰 **Current offers:** Command Code offers [4× usage of DeepSeek V4 Pro](https://commandcode.ai/docs/resources/pricing-limits#deepseek-v4-pro-4x-usage) and [2× usage of Qwen 3.7 Max](https://commandcode.ai/docs/resources/pricing-limits#qwen-3.7-max-2x-usage).
+> 💰 **Current offers:** Command Code offers [4× usage of DeepSeek V4 Pro](https://commandcode.ai/docs/resources/pricing-limits#deepseek-v4-pro-4x-usage), [2× usage of MiniMax M3](https://commandcode.ai/docs/resources/pricing-limits#minimax-m3-2x-usage), and MiMo price cuts.
 
 ## Models
 
-Models are fetched live from Command Code's Provider API at startup, so new models like Qwen 3.7 Max show up without a package release.
+Models are fetched live from Command Code's Provider API at startup, so new Provider API models show up without a package release.
+
+The provider uses the documented endpoints:
+
+- `GET https://api.commandcode.ai/provider/v1/models`
+- `POST https://api.commandcode.ai/provider/v1/chat/completions` for OpenAI-compatible and open-source models
+- `POST https://api.commandcode.ai/provider/v1/messages` for Claude models
 
 You can list the current Command Code models with:
 
@@ -134,16 +140,26 @@ On startup, the provider fetches:
 https://api.commandcode.ai/provider/v1/models
 ```
 
-For tests or local mocks, override it with `COMMANDCODE_MODELS_URL`.
+For tests or local mocks, override it with `COMMANDCODE_MODELS_URL`. Override the request base URL with `COMMANDCODE_API_BASE`.
+
+## Zero data retention
+
+Command Code supports zero data retention on the Provider API via `x-cmd-zdr: 1`. To send that header from this provider, start pi with either:
+
+```sh
+CMD_ZDR=1 pi
+# or
+COMMANDCODE_ZDR=1 pi
+```
 
 ## Pricing
 
-Command Code does not yet expose model pricing through its Provider API. The provider ships a static cost table (`MODEL_COSTS` in `index.ts`) for known models so that pi can display per-model pricing.
+Command Code does not yet expose model pricing through its Provider API. The provider ships a static cost table (`MODEL_COSTS` in `src/pricing.ts`) for known models so that pi can display per-model pricing.
 
-- Models present in `MODEL_COSTS` show their real per-million-token rates (including promotional deals like the DeepSeek V4 Pro 4× discount and Qwen 3.7 Max 2× discount).
+- Models present in `MODEL_COSTS` show their real per-million-token rates, including documented promotional pricing where applicable.
 - Models **not** in the table fall back to zero cost. When the Provider API adds a `cost` field, the static table can be removed.
 
-To add or update a price, edit the `MODEL_COSTS` record in `index.ts` and update the corresponding test in `tests/test-pricing.ts`.
+To add or update a price, edit the `MODEL_COSTS` record in `src/pricing.ts` and update `tests/test-pricing.ts`.
 
 ## Contributing
 

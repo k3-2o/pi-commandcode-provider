@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- Switch runtime requests to the official Command Code Provider API endpoints instead of the internal `/alpha/generate` stream.
+- Route Claude models through Anthropic Messages and all other Provider API models through OpenAI Chat Completions.
+- Support direct API-key login, Command Code CLI auth files, OMP auth files, and optional `CMD_ZDR=1` / `COMMANDCODE_ZDR=1` zero-data-retention headers.
+- Refresh Provider API model pricing and local pi/OMP smoke tests for the documented API shape.
+
+## 0.4.1 - 2026-06-16
+
+- Use the explicit `$COMMANDCODE_API_KEY` provider registration syntax expected by newer pi versions, removing the startup deprecation warning while keeping legacy placeholder compatibility.
+- Refresh development dependency lockfile entries to resolve npm audit findings for `tsx`/`esbuild` and `protobufjs`.
+
+### Contributors
+
+- @plumj-am — fixed the pi provider `apiKey` deprecation warning.
+- @cad0p — reported retry/deprecation-related issues that helped validate the current behavior.
+- @bl4zee1g — reported provider availability concerns that prompted additional local/live validation.
+
+## 0.4.0 - 2026-06-02
+
+- Add retry mechanism for transient HTTP errors (429, 5xx) and stream-level errors, configurable via pi `settings.json` `retry.provider` fields (`timeoutMs`, `maxRetries`, `maxRetryDelayMs`). Supports exponential backoff with jitter and `Retry-After` header.
+
 ## 0.3.1 - 2026-05-29
 
 - Bump CLI version header to `0.29.0` for Command Code API parity.
