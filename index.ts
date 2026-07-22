@@ -17,7 +17,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 
 import { COMMAND_CODE_CLI_VERSION, createStreamCommandCode, DEFAULT_API_BASE } from "./src/core.ts"
 import { calculateCommandCodeCost } from "./src/cost.ts"
-import { DEFAULT_MODELS_URL, fetchCommandCodeModels } from "./src/models.ts"
+import { DEFAULT_MODELS_URL, fetchCommandCodeModels, type CommandCodeModel } from "./src/models.ts"
 import { getApiKey, login, refreshToken } from "./src/oauth.ts"
 
 const API_BASE = process.env.COMMANDCODE_API_BASE ?? DEFAULT_API_BASE
@@ -79,7 +79,12 @@ const streamCommandCode = createStreamCommandCode({
 // ---------------------------------------------------------------------------
 
 export default async function (pi: ExtensionAPI) {
-  const models = await fetchCommandCodeModels({ url: MODELS_URL })
+  let models: readonly CommandCodeModel[]
+  try {
+    models = await fetchCommandCodeModels({ url: MODELS_URL })
+  } catch {
+    models = []
+  }
 
   pi.registerProvider("commandcode", {
     name: "Command Code",
