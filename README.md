@@ -12,6 +12,8 @@ A [pi](https://github.com/badlogic/pi-mono) custom provider that connects pi to 
 
 Models are fetched live from Command Code's Provider API at startup, so new models like Qwen 3.7 Max show up without a package release.
 
+If pi starts while offline, the provider loads without a model catalog so pi can still start. Once you're back online, run `/reload` to fetch the current model list.
+
 You can list the current Command Code models with:
 
 ```sh
@@ -133,6 +135,8 @@ On startup, the provider fetches:
 ```txt
 https://api.commandcode.ai/provider/v1/models
 ```
+
+If the fetch fails because the machine is offline, pi still starts and the provider registers with an empty model list. Run `/reload` after reconnecting to refresh the catalog.
 
 For tests or local mocks, override it with `COMMANDCODE_MODELS_URL`.
 
