@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Allow pi to start when the model list fetch fails due to no network connectivity. Command Code models are fetched live when online; if the provider starts offline, run `/reload` once connected to refresh the model catalog.
+
+### Contributors
+
+- @k3-2o — reported that the model-list fetch blocked pi startup when offline.
+
 ## 0.4.2 - 2026-07-05
 
 - Fix Oh My Pi extension validation by avoiding the missing `calculateCost` export from OMP's legacy `pi-ai` shim.
