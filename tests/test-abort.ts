@@ -5,6 +5,8 @@
 import assert from "node:assert/strict"
 import { after, before, beforeEach, describe, it } from "node:test"
 
+import type { AssistantMessageEvent } from "../src/core.ts"
+
 import {
   collectEvents,
   createTestDeps,
@@ -67,8 +69,27 @@ describe("streamCommandCode — abort behavior", () => {
       signal: controller.signal,
     })
 
-    setTimeout(() => controller.abort(), 50)
-    const events = await collectEvents(stream, 2_000)
+    // Abort deterministically as soon as the first delta arrives, instead of
+    // racing a fixed timer: the upstream response hangs after that delta, so
+    // aborting right then proves the reader is cancelled mid-stream.
+    const eventsPromise = (async () => {
+      const events: AssistantMessageEvent[] = []
+      for await (const event of stream) {
+        events.push(event)
+        if (event.type === "text_delta") controller.abort()
+        if (event.type === "done" || event.type === "error") break
+      }
+      return events
+    })()
+    const events = await Promise.race([
+      eventsPromise,
+      new Promise<AssistantMessageEvent[]>((_, reject) => {
+        setTimeout(
+          () => reject(new Error("Timed out collecting stream events after 2000ms")),
+          2_000,
+        )
+      }),
+    ])
 
     assert.ok(
       events.some((event) => event.type === "text_delta"),
