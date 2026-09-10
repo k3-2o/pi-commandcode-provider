@@ -23,9 +23,11 @@ jobs:
       - run: npm run typecheck
       # `npm test` includes tests/test-pi-local.mjs, which drives a real pi
       # binary against the mock API and otherwise skips silently.
+      # Pin to the same version as the memory benchmark: pi 0.85.x changed
+      # Anthropic stream termination handling and fails the Claude test here.
       - name: Install pi
         run: |
-          npm install -g @earendil-works/pi-coding-agent@latest
+          npm install -g @earendil-works/pi-coding-agent@0.84.4
           echo "PI_BIN=$(npm prefix -g)/bin/pi" >> "$GITHUB_ENV"
       - name: Verify pi starts
         run: '"$PI_BIN" --version'
