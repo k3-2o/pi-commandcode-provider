@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+
 - Refresh static model capabilities from `command-code@1.53.0`, adding `deepseek/deepseek-v4.1-flash`, `google/gemini-3.8-flash`, `inclusionai/ling-3.0-flash-sante:free`, `meituan/LongCat-2.0:free`, `meta/muse-spark-1.3`, `meta/muse-spark-1.3-contributor`, and `Qwen/Qwen3.8-Max-0902` with image, reasoning, effort, and output-limit metadata, and publishing the upstream `meta/muse-spark-1.1`, `meta/muse-spark-1.2`, and `meta/muse-spark-1.2-contributor` effort levels, which replaces their manual overrides.
 - Refresh display pricing for the current 69-model catalog: add the new DeepSeek V4.1 Flash, Gemini 3.8 Flash, Ling 3.0 Flash Sante (free), LongCat 2.0 (free), Muse Spark 1.3, Muse Spark 1.3 Contributor, and Qwen 3.8 Max 0902 rates, and apply the reduced DeepSeek V4 Flash rates ($0.15/$0.60/$0.003 off-peak).
 
