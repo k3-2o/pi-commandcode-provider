@@ -1,11 +1,36 @@
 # Changelog
 
 ## Unreleased
+- Refresh static model capabilities from `command-code@1.53.0`, adding `deepseek/deepseek-v4.1-flash`, `google/gemini-3.8-flash`, `inclusionai/ling-3.0-flash-sante:free`, `meituan/LongCat-2.0:free`, `meta/muse-spark-1.3`, `meta/muse-spark-1.3-contributor`, and `Qwen/Qwen3.8-Max-0902` with image, reasoning, effort, and output-limit metadata, and publishing the upstream `meta/muse-spark-1.1`, `meta/muse-spark-1.2`, and `meta/muse-spark-1.2-contributor` effort levels, which replaces their manual overrides.
+- Refresh display pricing for the current 69-model catalog: add the new DeepSeek V4.1 Flash, Gemini 3.8 Flash, Ling 3.0 Flash Sante (free), LongCat 2.0 (free), Muse Spark 1.3, Muse Spark 1.3 Contributor, and Qwen 3.8 Max 0902 rates, and apply the reduced DeepSeek V4 Flash rates ($0.15/$0.60/$0.003 off-peak).
+
+## 0.6.4 - 2026-09-03
+
+- Refresh the generated Command Code capability catalog from `command-code@1.40.1` to `command-code@1.44.0`, adding current image-input, reasoning, effort, and output-limit metadata for newly published models.
+- Expose selectable thinking levels (`minimal`, `low`, `medium`, `high`, `xhigh`) for `meta/muse-spark-1.3` and `meta/muse-spark-1.3-contributor`, so Pi and Oh My Pi forward the selected `reasoning_effort` instead of keeping thinking disabled.
+
+### Contributors
+
+- @heie54 — added and validated Muse Spark 1.3 reasoning support (#80).
+
+## 0.6.3 - 2026-09-02
+
+- Fix Oh My Pi chat returning `401 Invalid 'Authorization' header` after `/login`: OMP kept the unresolved `$COMMAND_CODE_API_KEY` placeholder as a literal config API key that shadowed its stored credentials and was sent as the Bearer token. The placeholder is now registered only on pi, where it keeps the API-key login method and `--api-key` working next to OAuth; on OMP the provider omits `apiKey` unless a real key is configured. Placeholders passed by the host are also resolved or stripped on the Provider API and compat stream paths, and the legacy generate transport resolves its key through the same rule.
+- Cover stored `/login` OAuth and API-key credentials, `--api-key`, and env keys end to end on both pi and Oh My Pi, asserting the exact Bearer token the mock API receives. CI now runs the pi end-to-end suite against a real `pi` binary instead of skipping it.
+
+### Contributors
+
+- @ebreen — reported and diagnosed the Oh My Pi `/login` 401, and opened the fix that this release builds on (#78).
+
+## 0.6.2 - 2026-09-02
 
 - Fix `omp plugin install` on Oh My Pi 18.x, which rejected 0.6.1 because its pi-ai lacks the `registerApiProvider` export; the compat registration now resolves at runtime and is skipped on hosts that register custom APIs themselves.
 - Run the Oh My Pi compatibility suite against a real `omp` binary in CI as a required check, and assert there that the extension loads against OMP's bundled pi packages.
-- Refresh static model capabilities from `command-code@1.53.0`, adding `deepseek/deepseek-v4.1-flash`, `google/gemini-3.8-flash`, `inclusionai/ling-3.0-flash-sante:free`, `meituan/LongCat-2.0:free`, `meta/muse-spark-1.3`, `meta/muse-spark-1.3-contributor`, and `Qwen/Qwen3.8-Max-0902` with image, reasoning, effort, and output-limit metadata, and publishing the upstream `meta/muse-spark-1.1`, `meta/muse-spark-1.2`, and `meta/muse-spark-1.2-contributor` effort levels, which replaces their manual overrides.
-- Refresh display pricing for the current 69-model catalog: add the new DeepSeek V4.1 Flash, Gemini 3.8 Flash, Ling 3.0 Flash Sante (free), LongCat 2.0 (free), Muse Spark 1.3, Muse Spark 1.3 Contributor, and Qwen 3.8 Max 0902 rates, and apply the reduced DeepSeek V4 Flash rates ($0.15/$0.60/$0.003 off-peak).
+- Pin the CI memory benchmark and Oh My Pi jobs to Bun 1.4.0, Node 22.23.2, and pi 0.84.4.
+
+### Contributors
+
+- @AmeMizuki — reported the failing `omp plugin install` on Oh My Pi 18.1.2.
 
 ## 0.6.1 - 2026-09-01
 
